@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JSON Viewer for Mac — 产品方案 &amp; MVP 规格 v3</title>
+<style>
+  :root {
+    --bg: #f8f9fa; --card: #ffffff; --text: #1a1a2e; --text-muted: #6b7280;
+    --border: #e5e7eb; --accent: #2563eb; --accent-light: #dbeafe;
+    --green: #059669; --green-light: #d1fae5;
+    --orange: #d97706; --orange-light: #fef3c7;
+    --red: #dc2626; --red-light: #fee2e2;
+    --purple: #7c3aed; --purple-light: #ede9fe;
+    --radius: 12px;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.6; padding: 40px 24px;
+  }
+  .container { max-width: 960px; margin: 0 auto; }
+  h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; letter-spacing: -0.5px; }
+  h2 { font-size: 20px; font-weight: 700; margin: 40px 0 16px; padding-bottom: 8px; border-bottom: 2px solid var(--accent); }
+  h3 { font-size: 16px; font-weight: 600; margin: 24px 0 12px; }
+  h4 { font-size: 15px; font-weight: 700; margin-bottom: 12px; }
+  .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 32px; }
+  .badge {
+    display: inline-block; padding: 2px 10px; border-radius: 20px;
+    font-size: 12px; font-weight: 600;
+  }
+  .badge-mvp { background: var(--green-light); color: var(--green); }
+  .badge-v1 { background: var(--accent-light); color: var(--accent); }
+  .badge-v2 { background: var(--purple-light); color: var(--purple); }
+  .badge-no { background: #f3f4f6; color: #9ca3af; }
+  .badge-key { background: var(--red-light); color: var(--red); }
+  .badge-free { background: var(--orange-light); color: var(--orange); }
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 24px; margin-bottom: 20px;
+  }
+  .card-title {
+    font-size: 16px; font-weight: 700; margin-bottom: 16px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .metrics {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px; margin-bottom: 24px;
+  }
+  .metric {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px; text-align: center;
+  }
+  .metric-value { font-size: 32px; font-weight: 800; color: var(--accent); letter-spacing: -1px; }
+  .metric-label { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th {
+    text-align: left; padding: 10px 12px; background: var(--bg);
+    font-weight: 600; font-size: 12px; text-transform: uppercase;
+    letter-spacing: 0.5px; color: var(--text-muted); border-bottom: 2px solid var(--border);
+  }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  tr:last-child td { border-bottom: none; }
+  .timeline { margin: 16px 0; }
+  .timeline-step { display: flex; gap: 16px; margin-bottom: 20px; }
+  .step-marker {
+    flex-shrink: 0; width: 40px; height: 32px; border-radius: 6px;
+    background: var(--accent); color: white; font-size: 12px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .step-body { flex: 1; }
+  .step-title { font-weight: 600; margin-bottom: 4px; }
+  .step-text { font-size: 14px; color: var(--text-muted); }
+  .compare {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 16px 0;
+  }
+  @media (max-width: 640px) { .compare { grid-template-columns: 1fr; } }
+  .compare-col {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px;
+  }
+  .feature-list { list-style: none; }
+  .feature-list li {
+    padding: 6px 0; font-size: 14px;
+    display: flex; align-items: flex-start; gap: 8px;
+  }
+  .feature-list li::before {
+    content:""; flex-shrink:0; width:6px; height:6px;
+    border-radius:50%; background: var(--accent); margin-top:7px;
+  }
+  code {
+    background: #f1f5f9; padding: 1px 6px; border-radius: 4px;
+    font-size: 13px; font-family: "SF Mono", "Fira Code", monospace;
+  }
+  pre code { background: none; padding: 0; }
+  .tech-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;
+  }
+  .tech-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px;
+  }
+  .tech-card h5 { font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+  .tech-card p { font-size: 13px; color: var(--text-muted); }
+  hr { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
+  .footer { font-size: 13px; color: var(--text-muted); }
+  .strikethrough { text-decoration: line-through; color: #9ca3af; }
+
+  /* JSONL mock */
+  .jsonl-mock {
+    background: #1e1e1e; border-radius: var(--radius); padding: 20px;
+    color: #d4d4d4; font-size: 13px; margin: 16px 0;
+  }
+  .jsonl-nav {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 12px; background: #2d2d2d;
+    border-radius: 8px; margin-bottom: 12px;
+    font-family: "SF Mono", monospace; font-size: 13px;
+  }
+  .jsonl-nav-btn {
+    padding: 4px 12px; border-radius: 4px; border: 1px solid #555;
+    color: #ccc; cursor: pointer; font-size: 12px;
+  }
+  .jsonl-pos { color: #888; flex: 1; }
+  .jsonl-body { display: flex; gap: 12px; }
+  .jsonl-list {
+    width: 70px; background: #2d2d2d; border-radius: 6px;
+    padding: 6px; font-size: 12px; color: #888; text-align: center;
+  }
+  .jsonl-list .active { color: #fff; background: #3a3a3a; border-radius: 3px; padding: 2px 0; }
+  .jsonl-list span { display: block; padding: 2px 0; }
+  .jsonl-tree {
+    flex: 1; background: #2d2d2d; border-radius: 6px;
+    padding: 10px 14px; font-size: 13px; line-height: 1.8;
+  }
+  .jsonl-tree .key { color: #9cdcfe; }
+  .jsonl-tree .str { color: #ce9178; }
+  .jsonl-tree .num { color: #b5cea8; }
+  .jsonl-tree .bool { color: #569cd6; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>🔧 JSON Viewer for Mac</h1>
+<p class="subtitle">对标 OK JSON · 免费开源 · 极简 MVP · 默认深色 · GitHub 分发</p>
+
+<div class="metrics">
+  <div class="metric"><div class="metric-value">12</div><div class="metric-label">MVP 功能点</div></div>
+  <div class="metric"><div class="metric-value">5</div><div class="metric-label">永久排除项</div></div>
+  <div class="metric"><div class="metric-value">$0</div><div class="metric-label">用户成本</div></div>
+  <div class="metric"><div class="metric-value">$17.99</div><div class="metric-label">对标竞品售价</div></div>
+</div>
+
+<!-- MVP -->
+<h2>一、MVP 功能（12 项 · 第 1–2 周）</h2>
+
+<div class="card">
+  <div class="card-title">极简核心</div>
+  <table>
+    <thead><tr><th>#</th><th>功能</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>双面板布局</td><td>左侧纯文本编辑 + 右侧树结构，拖拽调宽度</td></tr>
+      <tr><td>2</td><td>树结构浏览</td><td>NSOutlineView，可折叠节点，类型标记（对象/数组/字符串/数字/布尔/null）</td></tr>
+      <tr><td>3</td><td>文本编辑</td><td>NSTextView，<strong>默认深色 UI</strong>（暗底白字），无语法高亮</td></tr>
+      <tr><td>4</td><td>格式化</td><td>默认 4 空格缩进</td></tr>
+      <tr><td>5</td><td>压缩</td><td>单行紧凑输出</td></tr>
+      <tr><td>6</td><td>自定义缩进</td><td>2 空格 / <strong>4 空格（默认）</strong> / Tab，实时生效</td></tr>
+      <tr><td>7</td><td>粘贴自动格式化</td><td>粘贴后检测并格式化；无效 JSON 标红 + 错误提示</td></tr>
+      <tr><td>8</td><td>复制</td><td>复制全部格式化文本</td></tr>
+      <tr><td>9</td><td>清空</td><td>一键清空两侧</td></tr>
+      <tr><td>10</td><td>保存 / 另存为 / 导出</td><td>⌘S 保存 · ⇧⌘S 另存为 · 导出 JSON 文件（含格式选项）</td></tr>
+      <tr><td>11</td><td>Finder 文件关联</td><td>.json 双击打开 + 拖拽到窗口/Dock</td></tr>
+      <tr><td>12</td><td>语法校验 + 错误定位</td><td>解析失败标红行号 + hover 错误原因</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>MVP 硬编码深色 UI，不做任何切换、不做语法着色。</p>
+
+<!-- V1 -->
+<h2>二、V1（第 3–4 周）</h2>
+
+<div class="card">
+  <div class="card-title">易用性补齐 — 按难度排列</div>
+  <table>
+    <thead><tr><th>功能</th><th>难度</th><th>估工</th></tr></thead>
+    <tbody>
+      <tr><td>多标签页（多文件同时打开）</td><td><span class="badge badge-mvp">简单</span></td><td>1–2 天</td></tr>
+      <tr><td>复制节点 JSON Path</td><td><span class="badge badge-mvp">简单</span></td><td>1 天</td></tr>
+      <tr><td>历史记录</td><td><span class="badge badge-mvp">简单</span></td><td>2 天</td></tr>
+      <tr><td>搜索（key/value 全文检索）</td><td><span class="badge badge-v1">中等</span></td><td>3–4 天</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- V2 -->
+<h2>三、V2（第 5–7 周）</h2>
+
+<div class="card">
+  <div class="card-title">数据结构扩展</div>
+  <table>
+    <thead><tr><th>功能</th><th>难度</th><th>估工</th></tr></thead>
+    <tbody>
+      <tr><td>JSONL 浏览（上一条/下一条模式）</td><td><span class="badge badge-v1">中等</span></td><td>4–5 天</td></tr>
+      <tr><td>JSON Diff</td><td><span class="badge badge-v1">中等</span></td><td>5 天</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- JSONL 交互设计 -->
+<h2>四、JSONL 交互设计</h2>
+
+<div class="jsonl-mock">
+
+  <!-- 导航栏 -->
+  <div class="jsonl-nav">
+    <span class="jsonl-nav-btn">◀ 上一条</span>
+    <span style="color:#888;">第</span> <strong style="color:#fff;">42</strong> <span style="color:#888;">/ 1,280 行</span>
+    <span class="jsonl-pos"></span>
+    <span>缩进：</span>
+    <select style="background:#3a3a3a;color:#ccc;border:1px solid #555;border-radius:4px;padding:2px 8px;font-size:12px;">
+      <option>4 空格</option>
+      <option>2 空格</option>
+      <option>Tab</option>
+    </select>
+    <span class="jsonl-nav-btn">下一条 ▶</span>
+  </div>
+
+  <!-- 主区域 -->
+  <div class="jsonl-body">
+    <!-- 行号列表 -->
+    <div class="jsonl-list">
+      <span>40</span><span>41</span><span class="active">42</span><span>43</span><span>44</span><span>…</span>
+    </div>
+
+    <!-- 当前行 JSON 树 -->
+    <div class="jsonl-tree">
+      <div>▼ { <span style="color:#888;">3 items</span> }</div>
+      <div>&nbsp;&nbsp;<span class="key">"id"</span>: <span class="num">1042</span></div>
+      <div>&nbsp;&nbsp;<span class="key">"name"</span>: <span class="str">"event_click"</span></div>
+      <div>&nbsp;&nbsp;▼ <span class="key">"payload"</span>: { <span style="color:#888;">2 items</span> }</div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="key">"x"</span>: <span class="num">320</span></div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="key">"y"</span>: <span class="num">480</span></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="compare">
+  <div class="compare-col">
+    <h4>核心交互</h4>
+    <ul class="feature-list">
+      <li>打开 JSONL → 自动解析第一行，展示树结构</li>
+      <li>◀ ▶ 按钮切换上一条/下一条，或键盘 ← →</li>
+      <li>左侧行号列表，当前位置高亮，点击跳转</li>
+      <li>文本视图显示当前行原始文本，可编辑</li>
+      <li>全局搜索：搜索所有行中的 key/value，结果弹列表，点击跳转对应行</li>
+    </ul>
+  </div>
+  <div class="compare-col">
+    <h4>编辑边界</h4>
+    <ul class="feature-list">
+      <li>编辑当前行后，重新序列化该行 → 写回原位置</li>
+      <li>每行独立校验：某行 JSON 无效不影响其他行</li>
+      <li>格式化只作用于当前行</li>
+      <li>批量格式化：一键格式化全部行</li>
+      <li>保存时完整写回文件，无效行保留原文 + 标记</li>
+    </ul>
+  </div>
+</div>
+
+<!-- 不做的 -->
+<h2>五、永久排除</h2>
+
+<div class="tech-grid">
+  <div class="tech-card">
+    <h5><span class="strikethrough">语法高亮</span></h5>
+    <p>不做任何 key/value 分色</p>
+  </div>
+  <div class="tech-card">
+    <h5><span class="strikethrough">主题切换</span></h5>
+    <p>硬编码深色，无切换功能</p>
+  </div>
+  <div class="tech-card">
+    <h5><span class="strikethrough">深色模式切换</span></h5>
+    <p>不跟随系统，不做手动切换</p>
+  </div>
+  <div class="tech-card">
+    <h5><span class="strikethrough">Quick Look</span></h5>
+    <p>不做 Finder 预览</p>
+  </div>
+  <div class="tech-card">
+    <h5><span class="strikethrough">jq / JSONPath</span></h5>
+    <p>不内建查询引擎</p>
+  </div>
+  <div class="tech-card">
+    <h5><span class="strikethrough">Raycast / 脚本</span></h5>
+    <p>不做扩展和脚本系统</p>
+  </div>
+</div>
+
+<!-- 技术选型 -->
+<h2>六、技术选型</h2>
+
+<div class="tech-grid">
+  <div class="tech-card">
+    <h5>UI 框架</h5>
+    <p>SwiftUI（窗口外壳 + 工具栏） + AppKit（NSOutlineView + NSTextView）</p>
+  </div>
+  <div class="tech-card">
+    <h5>配色方案</h5>
+    <p>硬编码深色：背景 #1e1e1e，文字 #d4d4d4，无切换逻辑</p>
+  </div>
+  <div class="tech-card">
+    <h5>JSON 解析</h5>
+    <p><code>JSONSerialization</code>（Foundation），零三方依赖</p>
+  </div>
+  <div class="tech-card">
+    <h5>JSONL 解析</h5>
+    <p>逐行读取 → <code>JSONSerialization</code> 逐行解析 + 懒加载</p>
+  </div>
+  <div class="tech-card">
+    <h5>文件关联</h5>
+    <p><code>UTType</code> + <code>NSDocument</code>，注册 .json/.jsonl/.ndjson</p>
+  </div>
+  <div class="tech-card">
+    <h5>打包分发</h5>
+    <p>Xcode Archive → DMG → 公证签名 → GitHub Release → V1 加 Homebrew Cask</p>
+  </div>
+</div>
+
+<!-- 路线图 -->
+<h2>七、路线图总览</h2>
+
+<div class="timeline">
+  <div class="timeline-step">
+    <div class="step-marker">MVP</div>
+    <div class="step-body">
+      <div class="step-title">第 1–2 周 · 核心骨架</div>
+      <div class="step-text">12 项：双面板 / 树 / 编辑 / 格式化 / 压缩 / 缩进 / 粘贴 / 复制 / 清空 / 保存导出 / Finder 关联 / 校验 · 默认深色 UI · v0.1.0</div>
+    </div>
+  </div>
+  <div class="timeline-step">
+    <div class="step-marker">V1</div>
+    <div class="step-body">
+      <div class="step-title">第 3–4 周 · 易用性</div>
+      <div class="step-text">多标签页 → 复制 JSON Path → 历史记录 → 搜索</div>
+    </div>
+  </div>
+  <div class="timeline-step">
+    <div class="step-marker">V2</div>
+    <div class="step-body">
+      <div class="step-title">第 5–7 周 · 结构能力</div>
+      <div class="step-text">JSONL 上一条/下一条浏览模式 → JSON Diff</div>
+    </div>
+  </div>
+</div>
+
+<!-- 项目结构 -->
+<h2>八、项目结构</h2>
+
+<div class="card">
+  <div class="card-title">Xcode 项目目录（MVP）</div>
+<pre style="font-size:13px; background:#f1f5f9; padding:16px; border-radius:8px; overflow-x:auto;">
+<code>JSONViewer/
+├── App/
+│   ├── JSONViewerApp.swift        # @main 入口
+│   └── Document.swift             # NSDocument 子类（文件打开/保存）
+├── Views/
+│   ├── ContentView.swift          # 双面板 HSplitView
+│   ├── TextEditorView.swift       # NSTextView 包装（深色硬编码）
+│   ├── TreeView.swift             # NSOutlineView 包装
+│   ├── ToolbarView.swift          # 工具栏：格式化/压缩/缩进/复制/清空/导出
+│   └── ErrorOverlay.swift         # 错误提示浮层
+├── Model/
+│   ├── JSONNode.swift             # 树节点模型
+│   ├── JSONParser.swift           # JSONSerialization 封装
+│   ├── JSONLParser.swift          # JSONL 逐行解析（V2）
+│   └── IndentOption.swift         # 缩进选项
+├── Resources/
+│   ├── Assets.xcassets            # 图标
+│   └── Info.plist                 # UTType 声明
+└── JSONViewer.xcodeproj</code></pre>
+</div>
+
+<hr>
+<p class="footer">📅 2026-07-14 v3 · 最终确认版</p>
+
+</div>
+</body>
+</html>
