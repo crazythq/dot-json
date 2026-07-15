@@ -26,9 +26,10 @@ struct ToolbarView: ToolbarContent {
             .pickerStyle(.menu)
             .frame(width: 100)
             .help("选择缩进方式：2空格 / 4空格 / Tab")
+        }
 
-            Divider()
-
+        // ── 文件操作 ──
+        ToolbarItemGroup {
             Button(action: { viewModel.clear() }) {
                 Label("清空", systemImage: "trash")
             }
