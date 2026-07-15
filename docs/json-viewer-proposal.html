@@ -361,6 +361,46 @@
 <h2>八、项目结构</h2>
 
 <div class="card">
+  <div class="card-title">平坦结构 — 每个目录一个独立目标，无共享库</div>
+<pre style="font-size:13px; background:#f1f5f9; padding:16px; border-radius:8px; overflow-x:auto;">
+<code>dot-json/
+├── mac/                      # macOS App（SwiftUI + AppKit）
+│   ├── DotJSON.xcodeproj     # TBD
+│   └── DotJSON/
+│       ├── App/              # DotJSONApp.swift / Document.swift
+│       ├── Views/            # ContentView / TextEditorView / TreeView / ToolbarView
+│       ├── Model/            # JSONNode / JSONParser / JSONFormatter / JSONLPreparser
+│       └── Resources/        # Assets.xcassets / Info.plist
+├── utools/                   # uTools 插件（计划中 · JS）
+├── raycast/                  # Raycast 扩展（计划中 · TS）
+└── docs/                     # 产品文档</code></pre>
+</div>
+<pre style="font-size:13px; background:#f1f5f9; padding:16px; border-radius:8px; overflow-x:auto;">
+<code>dot-json/
+├── DotJSONCore/              # 共享 SPM Package（零 UI/零平台依赖）
+│   ├── Package.swift
+│   ├── Sources/DotJSONCore/
+│   │   ├── JSONNode.swift
+│   │   ├── JSONParser.swift
+│   │   ├── JSONFormatter.swift
+│   │   └── JSONLPreparser.swift
+│   └── Tests/DotJSONCoreTests/
+├── mac/                      # macOS App（SwiftUI + AppKit）
+│   ├── DotJSON.xcodeproj     # TBD
+│   └── DotJSON/
+│       ├── App/              # DotJSONApp.swift / Document.swift
+│       ├── Views/            # ContentView / TextEditorView / TreeView / ToolbarView
+│       ├── Model/            # Platform extensions
+│       └── Resources/        # Assets.xcassets / Info.plist
+├── utools/                   # uTools 插件（计划中）
+├── raycast/                  # Raycast 扩展（计划中）
+└── docs/                     # 产品文档</code></pre>
+</div>
+
+<div class="card">
+  <div class="card-title">Xcode 项目目录（MVP · 旧方案）</div>
+
+<div class="card">
   <div class="card-title">Xcode 项目目录（MVP）</div>
 <pre style="font-size:13px; background:#f1f5f9; padding:16px; border-radius:8px; overflow-x:auto;">
 <code>JSONViewer/

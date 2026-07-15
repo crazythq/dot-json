@@ -11,12 +11,12 @@ struct ToolbarView: ToolbarContent {
             Button(action: { viewModel.format() }) {
                 Label("格式化", systemImage: "text.alignleft")
             }
-            .help("格式化 JSON（自动排版缩进）")
+            .help("格式化 JSON")
 
             Button(action: { viewModel.minify() }) {
                 Label("压缩", systemImage: "text.aligncenter")
             }
-            .help("压缩 JSON（移除所有空格和换行）")
+            .help("压缩 JSON")
 
             Picker("缩进", selection: Bindable(viewModel).indent) {
                 ForEach(JSONFormatter.Indent.allCases, id: \.self) { o in
@@ -25,26 +25,31 @@ struct ToolbarView: ToolbarContent {
             }
             .pickerStyle(.menu)
             .frame(width: 100)
-            .help("选择缩进方式：2空格 / 4空格 / Tab")
+            .help("缩进：2 空格 / 4 空格 / Tab")
         }
 
         // ── 文件操作 ──
         ToolbarItemGroup {
+            Button(action: { importDocument() }) {
+                Label("导入", systemImage: "square.and.arrow.down")
+            }
+            .help("导入 JSON 文件")
+
             Button(action: { viewModel.clear() }) {
                 Label("清空", systemImage: "trash")
             }
-            .help("清空编辑器全部内容")
+            .help("清空内容")
 
             Button(action: { pasteFromClipboard() }) {
                 Label("粘贴", systemImage: "doc.on.clipboard")
             }
-            .help("从剪贴板粘贴并自动格式化 JSON")
+            .help("粘贴并格式化")
             .keyboardShortcut("v", modifiers: [.command, .shift])
 
             Button(action: { copyToClipboard() }) {
                 Label("复制", systemImage: "doc.on.doc")
             }
-            .help("复制全部内容到剪贴板")
+            .help("复制到剪贴板")
 
             Menu {
                 Button("导出格式化 JSON") {
@@ -56,7 +61,7 @@ struct ToolbarView: ToolbarContent {
             } label: {
                 Label("导出", systemImage: "square.and.arrow.up")
             }
-            .help("将当前有效 JSON 导出为格式化或压缩文件")
+            .help("导出 JSON")
         }
 
         // ── Right group: search ──
@@ -75,13 +80,13 @@ struct ToolbarView: ToolbarContent {
                     .onSubmit { viewModel.search(searchText) }
                     .onChange(of: searchText) { _, v in viewModel.search(v) }
             }
-            .help("搜索 JSON 中的 key 或 value，上下箭头切换结果")
+            .help("搜索 Key 或值（↑↓切换）")
 
             if viewModel.searchMatchCount > 0 {
                 Button(action: { viewModel.prevSearchResult() }) {
                     Image(systemName: "chevron.up").font(.system(size: 9))
                 }
-                .help("上一个搜索结果")
+                .help("上一个结果")
 
                 Text("\(viewModel.activeSearchIndex + 1)/\(viewModel.searchMatchCount)")
                     .font(.system(size: 10, design: .monospaced))
@@ -90,7 +95,7 @@ struct ToolbarView: ToolbarContent {
                 Button(action: { viewModel.nextSearchResult() }) {
                     Image(systemName: "chevron.down").font(.system(size: 9))
                 }
-                .help("下一个搜索结果")
+                .help("下一个结果")
             }
         }
     }
@@ -103,6 +108,23 @@ struct ToolbarView: ToolbarContent {
     private func copyToClipboard() {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(viewModel.rawText, forType: .string)
+    }
+
+    /// 打开系统文件选择框，并将选中的 JSON 文件加载到当前编辑器。
+    ///
+    /// 用户取消选择时不改变当前编辑器状态；读取或格式校验失败时，复用视图模型的错误提示。
+    private func importDocument() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = false
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            do {
+                try viewModel.loadDocument(from: url)
+            } catch {
+                viewModel.reportFileError(error)
+            }
+        }
     }
 
     /// 打开导出面板，并按用户选择的格式写入一个新 JSON 文件。
