@@ -1,4 +1,5 @@
 import Foundation
+import DotJSONCore
 
 /// Tree wrapper around JSONNode for NSOutlineView data source.
 ///

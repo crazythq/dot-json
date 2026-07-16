@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+@testable import DotJSONCore
 @testable import DotJSON
 
 struct TreeDataSourceTests {

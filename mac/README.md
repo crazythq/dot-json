@@ -2,6 +2,9 @@
 
 DotJSON 的原生 macOS 14+ 客户端，使用 SwiftUI、AppKit 和 Swift Package Manager，零第三方依赖。
 
+同一 Swift Package 还提供零依赖的 `dotjson` CLI；GUI 与 CLI 共同依赖
+`DotJSONCore`，解析、格式化和压缩行为保持一致。
+
 ## MVP 功能
 
 - 双面板文本编辑与 JSON 树浏览
@@ -18,8 +21,29 @@ DotJSON 的原生 macOS 14+ 客户端，使用 SwiftUI、AppKit 和 Swift Packag
 ```bash
 cd mac
 swift test
-swift build
+swift build --product DotJSON
+swift build --product dotjson
 ```
+
+## CLI
+
+```bash
+swift build --product dotjson
+BIN_DIR="$(swift build --show-bin-path)"
+"$BIN_DIR/dotjson" --help
+```
+
+CLI 支持 `format`、`minify`、`validate` 和保守型 `repair`：
+
+```bash
+cat model-output.txt | "$BIN_DIR/dotjson" repair
+"$BIN_DIR/dotjson" format data.json --indent 2
+"$BIN_DIR/dotjson" validate data.json --quiet
+"$BIN_DIR/dotjson" repair data.json --write
+```
+
+省略 `FILE` 或传入 `-` 时读取 stdin。默认结果只写 stdout；只有显式传入
+`--write` 才会原地修改文件。Agent 可加入 `--json-errors` 获取结构化错误。
 
 ## 构建本地 App
 

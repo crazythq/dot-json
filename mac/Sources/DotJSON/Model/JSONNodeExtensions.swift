@@ -1,4 +1,5 @@
 import Foundation
+import DotJSONCore
 
 // Platform-specific extensions for JSONNode (macOS App).
 // All core types are now in the same module — no cross-module imports needed.
