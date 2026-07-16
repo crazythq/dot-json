@@ -1,4 +1,5 @@
 import Foundation
+import DotJSONCore
 
 /// Lightweight JSONL (JSON Lines) preparser.
 /// Splits a JSONL file into individual lines without parsing each,

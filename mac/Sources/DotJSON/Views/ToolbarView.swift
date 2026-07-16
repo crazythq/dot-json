@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import DotJSONCore
 
 struct ToolbarView: ToolbarContent {
     @Environment(EditorViewModel.self) private var viewModel

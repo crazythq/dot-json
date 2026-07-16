@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import DotJSONCore
 
 struct TreeView: NSViewRepresentable {
     @Environment(EditorViewModel.self) private var viewModel
