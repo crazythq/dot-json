@@ -9,3 +9,8 @@
 
 ## 状态
 🟡 计划中 — Mac App MVP 完成后再启动。
+
+## 图标资源
+
+- `icon.png`：预留给未来 uTools 插件使用的 1024×1024 RGBA 图标源。
+- 该文件与 macOS 的 `AppIcon-master.png` 保持一致，保留圆角与透明四角。
