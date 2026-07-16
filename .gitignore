@@ -50,7 +50,7 @@ iOSInjectionProject/
 # IDE
 .idea/
 .vscode/
+.worktrees/
 *.swp
 *.swo
 *~
-
