@@ -8,18 +8,6 @@ struct ContentView: View {
             TextEditorView()
                 .frame(minWidth: 300)
                 .background(Color(hex: "#1e1e1e"))
-                .overlay(alignment: .topTrailing) {
-                    if let error = viewModel.errorMessage {
-                        Text(error)
-                            .font(.system(size: 10, design: .monospaced))
-                            .foregroundColor(Color(hex: "#fca5a5"))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color(hex: "#3b1515"))
-                            .cornerRadius(4)
-                            .padding(6)
-                    }
-                }
             TreeView()
                 .frame(minWidth: 200)
                 .background(Color(hex: "#252526"))

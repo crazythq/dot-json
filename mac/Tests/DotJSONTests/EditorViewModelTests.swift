@@ -33,11 +33,59 @@ struct EditorViewModelTests {
         vm.format()
         #expect(vm.rawText.contains("\n"))
     }
+
+    @Test func formatRepairsPythonStyleObject() {
+        let vm = EditorViewModel()
+        vm.rawText = """
+        {
+          'visible123': True
+        }
+        """
+
+        vm.format()
+
+        #expect(vm.rawText == """
+        {
+            "visible123": true
+        }
+        """)
+        #expect(vm.errorMessage == nil)
+    }
+
+    @Test func formatRepairsUnquotedKeysAndMixedBooleanTokens() {
+        let vm = EditorViewModel()
+        vm.rawText = """
+        {
+          visible123: True,
+          "alreadyJson": true
+        }
+        """
+
+        vm.format()
+
+        #expect(vm.rawText == """
+        {
+            "alreadyJson": true,
+            "visible123": true
+        }
+        """)
+        #expect(vm.errorMessage == nil)
+    }
     @Test func minifyJSON() {
         let vm = EditorViewModel()
         vm.rawText = "{\n  \"a\": 1\n}"
         vm.minify()
         #expect(!vm.rawText.contains("\n"))
+    }
+
+    @Test func minifyRepairsPythonStyleObject() {
+        let vm = EditorViewModel()
+        vm.rawText = "{'visible123': True}"
+
+        vm.minify()
+
+        #expect(vm.rawText == #"{"visible123":true}"#)
+        #expect(vm.errorMessage == nil)
     }
     @Test func clearResetsState() {
         let vm = EditorViewModel()
@@ -200,6 +248,19 @@ struct EditorViewModelTests {
         let vm = EditorViewModel()
         vm.pasteAndFormat(#"{"b":2,"a":1}"#)
         #expect(vm.rawText.contains("\n"))
+    }
+    @Test func pastePythonStyleObjectAutoRepairsAndFormats() {
+        let vm = EditorViewModel()
+
+        vm.pasteAndFormat("{'visible123': True, 'missing': None,}")
+
+        #expect(vm.rawText == """
+        {
+            "missing": null,
+            "visible123": true
+        }
+        """)
+        #expect(vm.errorMessage == nil)
     }
     @Test func pasteInvalidJSONPreservesRaw() {
         let vm = EditorViewModel()

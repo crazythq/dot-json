@@ -61,11 +61,11 @@ final class EditorViewModel {
 
     // MARK: - Actions
     func format() {
-        guard let f = try? JSONFormatter.format(rawText, indent: indent) else { return }
+        guard let f = try? formattedOrRepaired(rawText) else { return }
         rawText = f
     }
     func minify() {
-        guard let c = try? JSONFormatter.minify(rawText) else { return }
+        guard let c = try? minifiedOrRepaired(rawText) else { return }
         rawText = c
     }
     func clear() {
@@ -74,7 +74,7 @@ final class EditorViewModel {
     }
     func pasteAndFormat(_ text: String) {
         guard !text.isEmpty else { return }
-        if autoFormatOnPaste, let f = try? JSONFormatter.format(text, indent: indent) {
+        if autoFormatOnPaste, let f = try? formattedOrRepaired(text) {
             rawText = f
         } else {
             rawText = text
@@ -191,6 +191,37 @@ final class EditorViewModel {
             errorMessage = error.localizedDescription
             errorLineNumber = parseErrorLine(from: error)
         }
+    }
+
+    /// 尝试把文本格式化为当前缩进风格，必要时先进行 Python 字面量修复。
+    ///
+    /// - Parameter text: 当前编辑器文本或剪贴板文本。
+    /// - Returns: 格式化后的标准 JSON；无法安全修复时返回 `nil`。
+    ///
+    /// 先走标准 JSON 格式化可以保持合法 JSON 的既有行为；只有失败时才进入保守 repair，
+    /// 避免把本来合法的 JSON 或用户正在编辑的半成品文本做额外解释。
+    private func formattedOrRepaired(_ text: String) throws -> String {
+        if let formatted = try? JSONFormatter.format(text, indent: indent) {
+            return formatted
+        }
+
+        let repaired = try JSONRepairer.repair(text)
+        return try JSONFormatter.format(repaired, indent: indent)
+    }
+
+    /// 尝试把文本压缩为单行标准 JSON，必要时先进行 Python 字面量修复。
+    ///
+    /// - Parameter text: 当前编辑器文本。
+    /// - Returns: 单行标准 JSON；无法安全修复时返回 `nil`。
+    ///
+    /// 压缩入口与格式化入口共享同一条 repair 边界，确保按钮语义一致。
+    private func minifiedOrRepaired(_ text: String) throws -> String {
+        if let minified = try? JSONFormatter.minify(text) {
+            return minified
+        }
+
+        let repaired = try JSONRepairer.repair(text)
+        return try JSONFormatter.minify(repaired)
     }
 
     /// 将解析器的 UTF-8 字节偏移转换为从 1 开始的行号。
