@@ -180,6 +180,45 @@ final class JSONTextView: NSTextView {
         guard let text = sourcePasteboard.string(forType: .string) else { return }
         onPaste?(text)
     }
+
+    /// 拦截 ⌘F，弹出原生查找栏。
+    ///
+    /// SwiftUI 不提供默认 Find 菜单，NSTextView 的 `performFindPanelAction` 仅在菜单触发时
+    /// 调用。这里直接拦截键盘事件，保证 ⌘F 一定能打开查找栏。
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard event.modifierFlags.contains(.command),
+              event.charactersIgnoringModifiers == "f" else {
+            return super.performKeyEquivalent(with: event)
+        }
+        guard let responder = window?.firstResponder as? NSView,
+              self === responder || responder.isDescendant(of: self) else {
+            // key equivalent 会遍历窗口内的视图；非焦点编辑器必须放行给右侧树。
+            return super.performKeyEquivalent(with: event)
+        }
+        usesFindBar = true
+        isIncrementalSearchingEnabled = true
+        performFindPanelAction(Self.makeShowFindInterfaceSender())
+        return true
+    }
+
+    /// 创建 AppKit 查找动作要求的发送者。
+    ///
+    /// - Returns: tag 为 `showFindInterface` 的菜单项，可传给 `performFindPanelAction(_:)`。
+    ///
+    /// `performFindPanelAction(_:)` 通过 sender 的 tag 区分显示查找栏、查找下一项等动作；
+    /// 传入 `nil` 没有动作语义，在 SwiftUI 托管的文本视图里不会可靠打开查找栏。
+    static func makeShowFindInterfaceSender() -> NSMenuItem {
+        let sender = NSMenuItem()
+        sender.tag = NSTextFinder.Action.showFindInterface.rawValue
+        return sender
+    }
+
+    /// 响应菜单或快捷键的查找面板动作。
+    override func performFindPanelAction(_ sender: Any?) {
+        usesFindBar = true
+        isIncrementalSearchingEnabled = true
+        super.performFindPanelAction(sender)
+    }
 }
 
 /// Wraps NSTextView with proper dark-theme colors and reliable focus handling.
@@ -219,6 +258,10 @@ struct TextEditorView: NSViewRepresentable {
         textView.allowsCharacterPickerTouchBarItem = false
 
         scrollView.documentView = textView
+
+        // 原生 ⌘F 查找栏
+        textView.usesFindBar = true
+        textView.isIncrementalSearchingEnabled = true
         let rulerView = LineNumberRulerView(scrollView: scrollView)
         rulerView.clientView = textView
         containerView.addSubview(rulerView)
@@ -337,10 +380,6 @@ struct TextEditorView: NSViewRepresentable {
             }
             textView.applyThemeAttributesToCurrentText()
             textView.updateDocumentSize(in: scrollView)
-            textView.applySearchHighlights(
-                results: searchResults,
-                activeIndex: activeSearchIndex
-            )
             lastDocumentLayoutViewportSize = scrollView.contentView.bounds.size
             lineNumberRulerView?.needsDisplay = true
         }

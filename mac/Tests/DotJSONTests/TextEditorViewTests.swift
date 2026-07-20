@@ -55,6 +55,20 @@ struct TextEditorViewTests {
         #expect(color == NSColor(hex: "#d4d4d4"))
     }
 
+    /// 验证左侧 Cmd+F 使用 AppKit 约定的明确查找动作，而不是传入无法判定动作的 nil。
+    @Test func findShortcutUsesShowFindInterfaceActionTag() throws {
+        let sourceURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/DotJSON/Views/TextEditorView.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+
+        #expect(source.contains("NSTextFinder.Action.showFindInterface.rawValue"))
+        #expect(source.contains("self === responder || responder.isDescendant(of: self)"))
+        #expect(!source.contains("performFindPanelAction(nil)"))
+    }
+
     @Test func programmaticTextKeepsDarkThemeForegroundColor() throws {
         let textView = JSONTextView()
 
@@ -195,6 +209,45 @@ struct TextEditorViewTests {
         #expect(outlineView.numberOfRows == 0)
     }
 
+    /// 验证按稳定 ID 重新取得的树项仍能控制 NSOutlineView 中已经存在的同一节点。
+    @Test func equivalentTreeItemCanExpandExistingOutlineNode() throws {
+        let viewModel = EditorViewModel()
+        viewModel.rawText = #"{"outer":{"target":1}}"#
+        let outlineView = NSOutlineView()
+        outlineView.addTableColumn(NSTableColumn(identifier: .init("TreeColumn")))
+        let coordinator = TreeView.Coordinator()
+        coordinator.outlineView = outlineView
+        outlineView.dataSource = coordinator
+        outlineView.delegate = coordinator
+        coordinator.reloadIfNeeded(viewModel: viewModel)
+        let root = try #require(viewModel.treeRoot)
+        let tree = JSONTree(root: root)
+        let outerID = TreeNodeID(components: [.key("outer")])
+        let equivalentOuterItem = try #require(tree.item(for: outerID))
+
+        outlineView.expandItem(equivalentOuterItem)
+
+        #expect(outlineView.isItemExpanded(equivalentOuterItem))
+        #expect(outlineView.numberOfRows == 3)
+    }
+
+    /// 搜索结果切换只能处理展开集合的差异，不能遍历大纲的全部可见行。
+    ///
+    /// 大 JSON 展开根节点后可能拥有数十万行；若每次切换结果都扫描
+    /// `numberOfRows`，索引本身再快也无法满足三秒内响应的交互要求。
+    @Test func treeSearchExpansionAppliesOnlyStateDifference() throws {
+        let sourceURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/DotJSON/Views/TreeView.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+
+        #expect(source.contains("desiredExpandedIDs.subtracting(lastAppliedExpandedIDs)"))
+        #expect(source.contains("lastAppliedExpandedIDs.subtracting(desiredExpandedIDs)"))
+        #expect(!source.contains("stride(from: outlineView.numberOfRows - 1"))
+    }
+
     @Test func rulerStoresErrorMetadataForHoverAndHighlight() {
         let ruler = LineNumberRulerView(scrollView: NSScrollView())
 
@@ -254,7 +307,7 @@ struct TextEditorViewTests {
         #expect(secondBackground == JSONTextView.activeSearchMatchColor)
     }
 
-    @Test func treeViewSourceConfiguresWrappingRowsAndSearchSelection() throws {
+    @Test func treeViewSourceConfiguresWrappingRowsAndStableSearchSelection() throws {
         let sourceURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -263,9 +316,13 @@ struct TextEditorViewTests {
         let source = try String(contentsOf: sourceURL, encoding: .utf8)
 
         #expect(source.contains("outlineView.usesAutomaticRowHeights = true"))
-        #expect(source.contains("tf.lineBreakMode = .byWordWrapping"))
-        #expect(source.contains("tf.maximumNumberOfLines = 0"))
-        #expect(source.contains("selectAndScrollToActiveSearchResult"))
-        #expect(source.contains("highlightSearchMatches"))
+        #expect(source.contains("textField.lineBreakMode = .byWordWrapping"))
+        #expect(source.contains("textField.maximumNumberOfLines = 0"))
+        #expect(source.contains("private func selectAndScroll("))
+        #expect(source.contains("private func applySearchHighlights("))
+        #expect(source.contains("TreeExpansionState()"))
+        #expect(source.contains("outlineView.rows(in: outlineView.visibleRect)"))
+        #expect(source.contains("override var acceptsFirstResponder: Bool"))
+        #expect(source.contains("window?.makeFirstResponder(self)"))
     }
 }

@@ -8,10 +8,18 @@ import DotJSONCore
 struct JSONTree {
     let root: JSONNode
 
-    struct Item: Identifiable {
-        let id: String
+    struct Item: Identifiable, Hashable {
+        let id: TreeNodeID
         let key: String
         let node: JSONNode
+
+        static func == (lhs: Item, rhs: Item) -> Bool {
+            lhs.id == rhs.id
+        }
+
+        func hash(into hasher: inout Hasher) {
+            hasher.combine(id)
+        }
     }
 
     init(root: JSONNode) {
@@ -37,7 +45,7 @@ struct JSONTree {
             case .array:  key = "[root]"
             default:      key = "root"
             }
-            return Item(id: "$", key: key, node: root)
+            return Item(id: .root, key: key, node: root)
         }
 
         let node = item!.node
@@ -45,10 +53,18 @@ struct JSONTree {
         case .object(let pairs):
             guard pairs.indices.contains(index) else { return nil }
             let pair = pairs[index]
-            return Item(id: "\(item!.id)/\(pair.key)", key: pair.key, node: pair.value)
+            return Item(
+                id: item!.id.appending(.key(pair.key)),
+                key: pair.key,
+                node: pair.value
+            )
         case .array(let items):
             guard items.indices.contains(index) else { return nil }
-            return Item(id: "\(item!.id)/\(index)", key: "[\(index)]", node: items[index])
+            return Item(
+                id: item!.id.appending(.index(index)),
+                key: "[\(index)]",
+                node: items[index]
+            )
         default:
             return nil
         }
@@ -58,20 +74,59 @@ struct JSONTree {
         guard let item else { return true }
         return item.node.isContainer
     }
+
+    /// 按稳定节点身份直接取得树项。
+    ///
+    /// - Parameter nodeID: 从根到目标节点的 key/index 路径。
+    /// - Returns: 路径与当前树结构匹配时返回目标项，否则返回 `nil`。
+    ///
+    /// 搜索结果已经携带完整身份，因此这里只按路径深度导航，不再 DFS 扫描其他分支。
+    func item(for nodeID: TreeNodeID) -> Item? {
+        var currentNode = root
+        var currentID = TreeNodeID.root
+        var currentKey: String
+        switch root {
+        case .object:
+            currentKey = "{root}"
+        case .array:
+            currentKey = "[root]"
+        default:
+            currentKey = "root"
+        }
+
+        for component in nodeID.components {
+            switch (currentNode, component) {
+            case let (.object(pairs), .key(requestedKey)):
+                guard let pair = pairs.first(where: { $0.key == requestedKey }) else {
+                    return nil
+                }
+                currentNode = pair.value
+                currentID = currentID.appending(.key(requestedKey))
+                currentKey = requestedKey
+            case let (.array(items), .index(index)):
+                guard items.indices.contains(index) else { return nil }
+                currentNode = items[index]
+                currentID = currentID.appending(.index(index))
+                currentKey = "[\(index)]"
+            default:
+                return nil
+            }
+        }
+
+        return Item(id: currentID, key: currentKey, node: currentNode)
+    }
 }
 
 extension JSONTree.Item {
-    /// Full JSONPath for this item, derived from its ID.
-    /// Example: id="$/users/0/name" → "$.users[0].name"
+    /// 当前节点的完整 JSONPath。
     var jsonPath: String {
-        let parts = id.split(separator: "/")
-        guard parts.count > 1 else { return "$" }
         var path = "$"
-        for part in parts.dropFirst() {
-            if part.allSatisfy(\.isNumber) {
-                path += "[\(part)]"
-            } else {
-                path += ".\(part)"
+        for component in id.components {
+            switch component {
+            case .key(let key):
+                path += ".\(key)"
+            case .index(let index):
+                path += "[\(index)]"
             }
         }
         return path

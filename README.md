@@ -25,7 +25,7 @@ sharing the same design contract, not the same codebase.
 
 | Phase | Target | Key Features |
 |-------|--------|-------------|
-| **MVP** | v0.1.0 | Dual-pane layout, tree view, format/minify, indent control, paste/clear/copy, save/export, Finder integration, validation, dark UI |
+| **MVP** | v0.1.0 | Dual-pane layout, tree view, format/minify, indent control, paste/clear/copy, save/export, Finder integration, validation, dark UI, tree context menu (copy key/value/path), dual independent search (⌘F left=find bar, ⌘F right=tree search), search debounce, expand-on-match |
 | **V1** | v0.2.0 | Multi-tab, copy JSON Path, search, history |
 | **V2** | v0.3.0 | JSONL navigation, JSON Diff |
 

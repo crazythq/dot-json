@@ -56,15 +56,35 @@ final class EditorViewModel {
     var autoFormatOnPaste = true
     var searchResults: [SearchResult] = []
     var activeSearchIndex: Int = 0
+    private(set) var treeSearchMatches: [TreeSearchMatch] = []
+    private(set) var activeTreeSearchIndex: Int = 0
+    private(set) var treeSearchQuery: String = ""
     private var savedText: String = ""
     private var searchQuery: String = ""
+    private var treeGeneration = 0
+    private var treeSearchGeneration = 0
+
+    /// 后台索引任务的返回值；generation 用于拒绝旧文档的过期索引。
+    private struct TreeIndexBuild: Sendable {
+        let generation: Int
+        let index: TreeSearchIndex
+    }
+
+    /// 当前文档的后台树索引构建任务。
+    @ObservationIgnored
+    private var treeIndexTask: Task<TreeIndexBuild, Never>?
 
     var isModified: Bool { rawText != savedText }
     var searchMatchCount: Int { searchResults.count }
+    var treeSearchMatchCount: Int { treeSearchMatches.count }
     var documentTitle: String { fileURL?.lastPathComponent ?? "Untitled" }
     var activeSearchResult: SearchResult? {
         guard searchResults.indices.contains(activeSearchIndex) else { return nil }
         return searchResults[activeSearchIndex]
+    }
+    var activeTreeSearchMatch: TreeSearchMatch? {
+        guard treeSearchMatches.indices.contains(activeTreeSearchIndex) else { return nil }
+        return treeSearchMatches[activeTreeSearchIndex]
     }
 
     init() { Self.shared = self }
@@ -79,6 +99,9 @@ final class EditorViewModel {
         rawText = c
     }
     func clear() {
+        treeSearchQuery = ""
+        treeSearchMatches = []
+        activeTreeSearchIndex = 0
         rawText = ""; treeRoot = nil; errorMessage = nil; errorLineNumber = 0
         fileURL = nil; savedText = ""; searchQuery = ""; searchResults = []; activeSearchIndex = 0
     }
@@ -103,6 +126,84 @@ final class EditorViewModel {
     func prevSearchResult() {
         guard !searchResults.isEmpty else { return }
         activeSearchIndex = activeSearchIndex == 0 ? searchResults.count - 1 : activeSearchIndex - 1
+    }
+
+    /// 发起一次右侧面板搜索，并返回可供测试或立即提交等待的任务。
+    ///
+    /// - Parameter query: 区分大小写的 key/value 查询文本；空字符串清空结果。
+    /// - Returns: 非空查询对应的后台任务；空查询完成同步清理后返回 `nil`。
+    ///
+    /// 查询版本必须在这个同步入口中生成。如果把版本生成放进外层 `Task`，两个连续用户请求
+    /// 可能被调度器逆序启动，较早的请求反而取得更大的版本号并覆盖新结果。
+    @discardableResult
+    func searchTree(_ query: String) -> Task<Void, Never>? {
+        treeSearchQuery = query
+        treeSearchGeneration += 1
+        let requestedSearchGeneration = treeSearchGeneration
+
+        guard !query.isEmpty else {
+            treeSearchMatches = []
+            activeTreeSearchIndex = 0
+            return nil
+        }
+        guard let treeIndexTask else {
+            treeSearchMatches = []
+            activeTreeSearchIndex = 0
+            return nil
+        }
+
+        let requestedTreeGeneration = treeGeneration
+        return Task { [weak self] in
+            await self?.performTreeSearch(
+                query: query,
+                requestedTreeGeneration: requestedTreeGeneration,
+                requestedSearchGeneration: requestedSearchGeneration,
+                treeIndexTask: treeIndexTask
+            )
+        }
+    }
+
+    /// 等待索引并执行查询，只允许仍为最新的文档和请求发布结果。
+    private func performTreeSearch(
+        query: String,
+        requestedTreeGeneration: Int,
+        requestedSearchGeneration: Int,
+        treeIndexTask: Task<TreeIndexBuild, Never>
+    ) async {
+        let build = await treeIndexTask.value
+        guard requestedTreeGeneration == treeGeneration,
+              build.generation == treeGeneration,
+              requestedSearchGeneration == treeSearchGeneration,
+              query == treeSearchQuery else {
+            return
+        }
+
+        let matches = await Task.detached(priority: .userInitiated) {
+            build.index.matches(query: query)
+        }.value
+        guard requestedTreeGeneration == treeGeneration,
+              build.generation == treeGeneration,
+              requestedSearchGeneration == treeSearchGeneration,
+              query == treeSearchQuery else {
+            return
+        }
+
+        treeSearchMatches = matches
+        activeTreeSearchIndex = 0
+    }
+
+    /// 切换到下一条右侧树搜索结果，并在末尾循环到第一条。
+    func nextTreeSearchResult() {
+        guard !treeSearchMatches.isEmpty else { return }
+        activeTreeSearchIndex = (activeTreeSearchIndex + 1) % treeSearchMatches.count
+    }
+
+    /// 切换到上一条右侧树搜索结果，并在第一条向前时循环到末尾。
+    func prevTreeSearchResult() {
+        guard !treeSearchMatches.isEmpty else { return }
+        activeTreeSearchIndex = activeTreeSearchIndex == 0
+            ? treeSearchMatches.count - 1
+            : activeTreeSearchIndex - 1
     }
 
     // MARK: - File
@@ -243,16 +344,50 @@ final class EditorViewModel {
 
     private func reparse() {
         guard !rawText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            treeRoot = nil; errorMessage = nil; errorLineNumber = 0; return
-        }
-        do {
-            treeRoot = try JSONParser.parse(rawText)
+            treeRoot = nil
             errorMessage = nil
             errorLineNumber = 0
+            scheduleTreeSearchIndex(for: nil)
+            return
+        }
+        do {
+            let parsedRoot = try JSONParser.parse(rawText)
+            treeRoot = parsedRoot
+            errorMessage = nil
+            errorLineNumber = 0
+            scheduleTreeSearchIndex(for: parsedRoot)
         } catch {
             treeRoot = nil
             errorMessage = error.localizedDescription
             errorLineNumber = parseErrorLine(from: error)
+            scheduleTreeSearchIndex(for: nil)
+        }
+    }
+
+    /// 为新树启动后台索引构建，并使旧文档、旧查询结果立即失效。
+    ///
+    /// - Parameter root: 当前有效 JSON 根节点；`nil` 表示清除索引。
+    private func scheduleTreeSearchIndex(for root: JSONNode?) {
+        treeGeneration += 1
+        let requestedTreeGeneration = treeGeneration
+        treeSearchGeneration += 1
+        treeSearchMatches = []
+        activeTreeSearchIndex = 0
+        treeIndexTask?.cancel()
+        treeIndexTask = nil
+
+        guard let root else { return }
+        treeIndexTask = Task.detached(priority: .userInitiated) {
+            TreeIndexBuild(
+                generation: requestedTreeGeneration,
+                index: TreeSearchIndex(root: root)
+            )
+        }
+
+        // 编辑器内容变化时，保持搜索框查询不变，并在新索引完成后刷新结果。
+        let pendingQuery = treeSearchQuery
+        if !pendingQuery.isEmpty {
+            searchTree(pendingQuery)
         }
     }
 

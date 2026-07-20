@@ -13,8 +13,14 @@ DotJSON 的原生 macOS 14+ 客户端，使用 SwiftUI、AppKit 和 Swift Packag
 - 打开、保存、另存为，以及格式化/压缩导出
 - Finder/Dock 文件打开、窗口拖放和 `.json` 文件关联
 - 精确错误行号、红色行号标记和悬停错误说明
+- 树右键菜单：Copy Key / Copy Value（字符串自动去引号）/ Copy JSON Path
+- 树双击展开/收起节点
+- 左侧 ⌘F 原生查找栏（NSTextView usesFindBar）
+- 右侧 ⌘F 内嵌搜索框（焦点感知，仅树面板聚焦时拦截）
+- 搜索 200ms 防抖，Enter 切换下一个命中
+- 搜索高亮 + 自动展开命中祖先链，不改变用户已有展开/收起状态
 
-多标签、持久历史与搜索增强属于 V1；JSONL 导航和 JSON Diff 属于 V2，不在当前 MVP 范围。
+多标签、持久历史属于 V1；JSONL 导航和 JSON Diff 属于 V2，不在当前 MVP 范围。
 
 ## 开发与测试
 
