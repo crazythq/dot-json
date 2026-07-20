@@ -1,23 +1,36 @@
 import AppKit
 
-/// 为 JSON 文本编辑器绘制行号，并突出显示解析失败所在行。
+/// 为 JSON 文本编辑器绘制独立行号栏，并突出显示解析失败所在行。
 ///
 /// 该视图只绘制当前可见字符范围，避免大文件滚动时遍历全文。错误原因通过
 /// AppKit tooltip 绑定在红色行号上，满足“标红行号并悬停查看原因”的交互要求。
 @MainActor
-final class LineNumberRulerView: NSRulerView, NSViewToolTipOwner {
+final class LineNumberRulerView: NSView, NSViewToolTipOwner {
+    /// 行号栏固定宽度。
+    static let width: CGFloat = 46
+
     /// 当前需要标红的行号；0 表示没有可定位的 JSON 错误。
     private(set) var errorLineNumber = 0
 
     /// 悬停错误行号时显示的解析错误。
     private(set) var errorMessage: String?
 
-    /// 创建绑定到指定滚动视图的垂直行号尺。
+    /// 承载 `NSTextView` 的滚动视图，用于获取当前可见区域。
+    private weak var scrollView: NSScrollView?
+
+    /// 当前行号栏对应的文本编辑器。
+    weak var clientView: NSTextView?
+
+    /// 使用和 `NSTextView` 一致的顶部原点坐标，保证行号与正文首行对齐。
+    override var isFlipped: Bool { true }
+
+    /// 创建绑定到指定滚动视图的行号栏。
     ///
     /// - Parameter scrollView: 承载 `NSTextView` 的滚动视图。
     init(scrollView: NSScrollView) {
-        super.init(scrollView: scrollView, orientation: .verticalRuler)
-        ruleThickness = 46
+        self.scrollView = scrollView
+        super.init(frame: NSRect(x: 0, y: 0, width: Self.width, height: 0))
+        translatesAutoresizingMaskIntoConstraints = false
     }
 
     @available(*, unavailable)
@@ -39,8 +52,8 @@ final class LineNumberRulerView: NSRulerView, NSViewToolTipOwner {
     /// 绘制背景、可见行号以及错误行的 tooltip 热区。
     ///
     /// - Parameter dirtyRect: AppKit 请求重绘的区域。
-    override func drawHashMarksAndLabels(in dirtyRect: NSRect) {
-        guard let textView = clientView as? NSTextView,
+    override func draw(_ dirtyRect: NSRect) {
+        guard let textView = clientView,
               let layoutManager = textView.layoutManager,
               let textContainer = textView.textContainer,
               let scrollView else {
@@ -159,7 +172,7 @@ final class LineNumberRulerView: NSRulerView, NSViewToolTipOwner {
         let label = NSAttributedString(string: String(lineNumber), attributes: attributes)
         let labelSize = label.size()
         let labelRect = NSRect(
-            x: ruleThickness - labelSize.width - 8,
+            x: Self.width - labelSize.width - 8,
             y: y,
             width: labelSize.width,
             height: max(labelSize.height, textView.font?.pointSize ?? 13)

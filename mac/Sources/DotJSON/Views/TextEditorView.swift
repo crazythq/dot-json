@@ -37,7 +37,7 @@ final class JSONTextView: NSTextView {
         isHorizontallyResizable = false
         autoresizingMask = [.width]
         textContainer?.containerSize = NSSize(
-            width: 0,
+            width: 1,
             height: CGFloat.greatestFiniteMagnitude
         )
         textContainer?.widthTracksTextView = true
@@ -56,6 +56,49 @@ final class JSONTextView: NSTextView {
         ]
         textStorage?.setAttributedString(NSAttributedString(string: text, attributes: attributes))
         typingAttributes = attributes
+        invalidateTextLayout()
+    }
+
+    /// 将当前文本存储归一化为编辑器主题属性，并保留用户当前选区。
+    ///
+    /// 用户输入或系统输入法有可能绕过 `setPlainText(_:)`，让 `NSTextView.string` 已经更新，
+    /// 但文字属性仍是系统默认值。此时右侧解析树会更新，左侧文字却可能因为颜色太暗而不可见。
+    func applyThemeAttributesToCurrentText() {
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: Self.editorFont,
+            .foregroundColor: Self.editorTextColor,
+        ]
+        font = Self.editorFont
+        textColor = Self.editorTextColor
+        typingAttributes = attributes
+
+        guard let textStorage, textStorage.length > 0 else { return }
+        let selectedRanges = selectedRanges
+        textStorage.beginEditing()
+        textStorage.addAttributes(
+            attributes,
+            range: NSRange(location: 0, length: textStorage.length)
+        )
+        textStorage.endEditing()
+        self.selectedRanges = selectedRanges
+        invalidateTextLayout()
+    }
+
+    /// 让 TextKit 丢弃旧布局并重绘当前可见文本。
+    ///
+    /// AppKit 文本存储可能已经有内容，但如果此前在零宽容器中完成布局，正文会保持不可见。
+    /// 显式失效布局可以确保后续 frame/container 更新后按真实宽度重新绘制。
+    func invalidateTextLayout() {
+        guard let layoutManager, let textContainer else {
+            needsDisplay = true
+            return
+        }
+        let range = NSRange(location: 0, length: max(textStorage?.length ?? 0, 0))
+        layoutManager.invalidateLayout(forCharacterRange: range, actualCharacterRange: nil)
+        layoutManager.invalidateDisplay(forCharacterRange: range)
+        layoutManager.ensureLayout(for: textContainer)
+        needsDisplay = true
+        enclosingScrollView?.contentView.needsDisplay = true
     }
 
     /// 根据可视区域和实际文本尺寸更新 NSScrollView 的 document view frame。
@@ -66,20 +109,28 @@ final class JSONTextView: NSTextView {
     /// frame 至少覆盖滚动视图内容区，并在长行或多行文本超出时扩展以启用滚动。
     func updateDocumentSize(in scrollView: NSScrollView) {
         guard let layoutManager, let textContainer else { return }
-        let viewport = scrollView.contentSize
+        let viewport = scrollView.contentView.bounds.size
         let viewportWidth = max(viewport.width, 1)
-        frame.size.width = viewportWidth
+        frame = NSRect(
+            origin: .zero,
+            size: NSSize(width: viewportWidth, height: max(viewport.height, 1))
+        )
         textContainer.containerSize = NSSize(
             width: max(viewportWidth - textContainerInset.width * 2, 1),
             height: CGFloat.greatestFiniteMagnitude
         )
+        invalidateTextLayout()
         layoutManager.ensureLayout(for: textContainer)
         let usedRect = layoutManager.usedRect(for: textContainer)
         let requiredHeight = ceil(usedRect.maxY + textContainerInset.height * 2)
-        frame.size = NSSize(
-            width: viewportWidth,
-            height: max(viewport.height, requiredHeight, 1)
+        frame = NSRect(
+            origin: .zero,
+            size: NSSize(
+                width: viewportWidth,
+                height: max(viewport.height, requiredHeight, 1)
+            )
         )
+        invalidateTextLayout()
     }
 
     /// 读取纯文本并转交 ViewModel；没有纯文本时不执行任何操作。
@@ -96,7 +147,10 @@ final class JSONTextView: NSTextView {
 struct TextEditorView: NSViewRepresentable {
     @Environment(EditorViewModel.self) private var viewModel
 
-    func makeNSView(context: Context) -> NSScrollView {
+    func makeNSView(context: Context) -> NSView {
+        let containerView = NSView()
+        containerView.translatesAutoresizingMaskIntoConstraints = false
+
         let scrollView = NSScrollView()
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
@@ -128,21 +182,33 @@ struct TextEditorView: NSViewRepresentable {
         scrollView.documentView = textView
         let rulerView = LineNumberRulerView(scrollView: scrollView)
         rulerView.clientView = textView
-        scrollView.verticalRulerView = rulerView
-        scrollView.hasVerticalRuler = true
-        scrollView.rulersVisible = true
+        containerView.addSubview(rulerView)
+        containerView.addSubview(scrollView)
+        NSLayoutConstraint.activate([
+            rulerView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+            rulerView.topAnchor.constraint(equalTo: containerView.topAnchor),
+            rulerView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
+            rulerView.widthAnchor.constraint(equalToConstant: LineNumberRulerView.width),
+            scrollView.leadingAnchor.constraint(equalTo: rulerView.trailingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+            scrollView.topAnchor.constraint(equalTo: containerView.topAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
+        ])
         context.coordinator.textView = textView
         context.coordinator.scrollView = scrollView
         context.coordinator.lineNumberRulerView = rulerView
-        return scrollView
+        context.coordinator.observeScrollViewBounds(scrollView, textView: textView)
+        return containerView
     }
 
-    func updateNSView(_ scrollView: NSScrollView, context: Context) {
-        guard let textView = context.coordinator.textView else { return }
-        if textView.string != viewModel.rawText {
-            textView.setPlainText(viewModel.rawText)
-        }
-        textView.updateDocumentSize(in: scrollView)
+    func updateNSView(_ containerView: NSView, context: Context) {
+        guard let textView = context.coordinator.textView,
+              let scrollView = context.coordinator.scrollView else { return }
+        context.coordinator.synchronizeTextView(
+            textView,
+            rawText: viewModel.rawText,
+            in: scrollView
+        )
         context.coordinator.lineNumberRulerView?.updateError(
             lineNumber: viewModel.errorLineNumber,
             message: viewModel.errorMessage
@@ -156,20 +222,90 @@ struct TextEditorView: NSViewRepresentable {
     @MainActor
     final class Coordinator: NSObject, NSTextViewDelegate {
         var viewModel: EditorViewModel
-        weak var textView: JSONTextView?
-        weak var scrollView: NSScrollView?
-        weak var lineNumberRulerView: LineNumberRulerView?
+        var textView: JSONTextView?
+        var scrollView: NSScrollView?
+        var lineNumberRulerView: LineNumberRulerView?
+        private var lastDocumentLayoutViewportSize: NSSize?
 
         init(viewModel: EditorViewModel) {
             self.viewModel = viewModel
         }
 
+        /// 监听滚动内容区尺寸变化，在 SwiftUI 完成首帧或分栏调整后重新布局文本。
+        ///
+        /// - Parameters:
+        ///   - scrollView: 承载文本视图的滚动容器。
+        ///   - textView: 需要随可视宽度更新 frame 和 TextKit 容器的文本视图。
+        func observeScrollViewBounds(_ scrollView: NSScrollView, textView: JSONTextView) {
+            scrollView.contentView.postsBoundsChangedNotifications = true
+            NotificationCenter.default.removeObserver(
+                self,
+                name: NSView.boundsDidChangeNotification,
+                object: nil
+            )
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(scrollViewBoundsDidChange(_:)),
+                name: NSView.boundsDidChangeNotification,
+                object: scrollView.contentView
+            )
+        }
+
+        /// 滚动内容区尺寸变化后重新计算 TextKit 容器，避免正文停留在零宽布局里。
+        ///
+        /// - Parameter notification: `NSClipView` bounds 变化通知。
+        @objc private func scrollViewBoundsDidChange(_ notification: Notification) {
+            guard let scrollView, let textView else { return }
+            updateDocumentSizeIfViewportChanged(textView, in: scrollView)
+            lineNumberRulerView?.needsDisplay = true
+        }
+
+        /// 仅在滚动视图可视区域尺寸变化时重新计算文本 document view。
+        ///
+        /// - Parameters:
+        ///   - textView: 当前承载 JSON 输入的 AppKit 文本视图。
+        ///   - scrollView: 承载文本视图的滚动容器。
+        ///
+        /// `NSView.boundsDidChangeNotification` 同时覆盖滚动偏移和尺寸变化。纯滚动时重置
+        /// document view frame 会干扰 `NSClipView` 的当前偏移，所以这里用尺寸作为布局条件。
+        func updateDocumentSizeIfViewportChanged(
+            _ textView: JSONTextView,
+            in scrollView: NSScrollView
+        ) {
+            let viewportSize = scrollView.contentView.bounds.size
+            guard lastDocumentLayoutViewportSize != viewportSize else { return }
+            textView.updateDocumentSize(in: scrollView)
+            lastDocumentLayoutViewportSize = viewportSize
+        }
+
+        /// 同步 SwiftUI 状态到 AppKit 文本视图，并确保内容已经存在时也重新应用可见主题。
+        ///
+        /// - Parameters:
+        ///   - textView: 当前承载 JSON 输入的 AppKit 文本视图。
+        ///   - rawText: `EditorViewModel` 中的最新原始 JSON 文本。
+        ///   - scrollView: 承载文本视图的滚动容器，用于更新 document view 尺寸。
+        func synchronizeTextView(
+            _ textView: JSONTextView,
+            rawText: String,
+            in scrollView: NSScrollView
+        ) {
+            if textView.string != rawText {
+                textView.setPlainText(rawText)
+            }
+            textView.applyThemeAttributesToCurrentText()
+            textView.updateDocumentSize(in: scrollView)
+            lastDocumentLayoutViewportSize = scrollView.contentView.bounds.size
+            lineNumberRulerView?.needsDisplay = true
+        }
+
         func textDidChange(_ notification: Notification) {
             guard let textView else { return }
+            textView.applyThemeAttributesToCurrentText()
             viewModel.rawText = textView.string
             if let scrollView {
                 textView.updateDocumentSize(in: scrollView)
             }
+            lineNumberRulerView?.needsDisplay = true
             lineNumberRulerView?.updateError(
                 lineNumber: viewModel.errorLineNumber,
                 message: viewModel.errorMessage

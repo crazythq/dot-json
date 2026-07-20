@@ -68,6 +68,59 @@ struct TextEditorViewTests {
         #expect(textView.string == #"{"visible":true}"#)
     }
 
+    @Test func textChangeReappliesDarkThemeForegroundColorToExistingEditorText() throws {
+        let viewModel = EditorViewModel()
+        let textView = JSONTextView()
+        let coordinator = TextEditorView.Coordinator(viewModel: viewModel)
+        coordinator.textView = textView
+        textView.configureForScrolling()
+        textView.string = #"{"a":[]}"#
+        textView.textStorage?.addAttribute(
+            .foregroundColor,
+            value: NSColor.black,
+            range: NSRange(location: 0, length: textView.string.count)
+        )
+
+        coordinator.textDidChange(Notification(name: NSText.didChangeNotification))
+
+        let color = try #require(
+            textView.textStorage?.attribute(.foregroundColor, at: 0, effectiveRange: nil)
+                as? NSColor
+        )
+        #expect(color == NSColor(hex: "#d4d4d4"))
+        #expect(viewModel.rawText == #"{"a":[]}"#)
+        #expect(viewModel.treeRoot != nil)
+    }
+
+    @Test func updateSynchronizesThemeWhenEditorTextAlreadyMatchesViewModelText() throws {
+        let viewModel = EditorViewModel()
+        let textView = JSONTextView()
+        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 400, height: 300))
+        let coordinator = TextEditorView.Coordinator(viewModel: viewModel)
+        textView.configureForScrolling()
+        scrollView.documentView = textView
+        viewModel.rawText = #"{"already":"synced"}"#
+        textView.string = viewModel.rawText
+        textView.textStorage?.addAttribute(
+            .foregroundColor,
+            value: NSColor.black,
+            range: NSRange(location: 0, length: textView.string.count)
+        )
+
+        coordinator.synchronizeTextView(
+            textView,
+            rawText: viewModel.rawText,
+            in: scrollView
+        )
+
+        let color = try #require(
+            textView.textStorage?.attribute(.foregroundColor, at: 0, effectiveRange: nil)
+                as? NSColor
+        )
+        #expect(color == NSColor(hex: "#d4d4d4"))
+        #expect(textView.string == viewModel.rawText)
+    }
+
     @Test func documentViewGetsNonZeroFrameAfterScrollViewLayout() {
         let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 400, height: 300))
         let textView = JSONTextView()
@@ -81,6 +134,32 @@ struct TextEditorViewTests {
         #expect(textView.frame.height >= scrollView.contentSize.height)
         #expect(textView.frame.width > 0)
         #expect(textView.frame.height > 0)
+    }
+
+    @Test func scrollOffsetChangeDoesNotRecalculateDocumentFrameWhenViewportSizeIsUnchanged() {
+        let viewModel = EditorViewModel()
+        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 400, height: 300))
+        let textView = JSONTextView()
+        let coordinator = TextEditorView.Coordinator(viewModel: viewModel)
+        textView.configureForScrolling()
+        scrollView.documentView = textView
+
+        coordinator.synchronizeTextView(
+            textView,
+            rawText: (0..<80).map { #"{"line":\#($0)}"# }.joined(separator: "\n"),
+            in: scrollView
+        )
+        let scrollAdjustedFrame = NSRect(
+            x: textView.frame.origin.x,
+            y: -120,
+            width: textView.frame.width,
+            height: textView.frame.height
+        )
+        textView.frame = scrollAdjustedFrame
+
+        coordinator.updateDocumentSizeIfViewportChanged(textView, in: scrollView)
+
+        #expect(textView.frame == scrollAdjustedFrame)
     }
 
     @Test func treeReloadPublishesRootBeforeDataSourceIsQueried() throws {
@@ -123,6 +202,12 @@ struct TextEditorViewTests {
 
         #expect(ruler.errorLineNumber == 3)
         #expect(ruler.errorMessage == "Invalid value")
+    }
+
+    @Test func lineNumberGutterUsesTopOriginCoordinates() {
+        let ruler = LineNumberRulerView(scrollView: NSScrollView())
+
+        #expect(ruler.isFlipped)
     }
 
     @Test func textChangeImmediatelyUpdatesRulerErrorMetadata() {
