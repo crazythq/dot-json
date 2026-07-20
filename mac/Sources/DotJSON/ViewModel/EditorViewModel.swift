@@ -31,7 +31,12 @@ final class EditorViewModel {
 
     nonisolated(unsafe) static weak var shared: EditorViewModel?
 
-    var rawText: String = "" { didSet { reparse() } }
+    var rawText: String = "" {
+        didSet {
+            reparse()
+            refreshSearchResults(resetActiveIndex: false)
+        }
+    }
     var treeRoot: JSONNode? = nil
     var errorMessage: String? = nil
     var errorLineNumber: Int = 0
@@ -52,10 +57,15 @@ final class EditorViewModel {
     var searchResults: [SearchResult] = []
     var activeSearchIndex: Int = 0
     private var savedText: String = ""
+    private var searchQuery: String = ""
 
     var isModified: Bool { rawText != savedText }
     var searchMatchCount: Int { searchResults.count }
     var documentTitle: String { fileURL?.lastPathComponent ?? "Untitled" }
+    var activeSearchResult: SearchResult? {
+        guard searchResults.indices.contains(activeSearchIndex) else { return nil }
+        return searchResults[activeSearchIndex]
+    }
 
     init() { Self.shared = self }
 
@@ -70,7 +80,7 @@ final class EditorViewModel {
     }
     func clear() {
         rawText = ""; treeRoot = nil; errorMessage = nil; errorLineNumber = 0
-        fileURL = nil; savedText = ""; searchResults = []; activeSearchIndex = 0
+        fileURL = nil; savedText = ""; searchQuery = ""; searchResults = []; activeSearchIndex = 0
     }
     func pasteAndFormat(_ text: String) {
         guard !text.isEmpty else { return }
@@ -83,18 +93,8 @@ final class EditorViewModel {
 
     // MARK: - Search
     func search(_ query: String) {
-        searchResults = []; activeSearchIndex = 0
-        guard !query.isEmpty else { return }
-        let lines = rawText.components(separatedBy: .newlines)
-        for (li, line) in lines.enumerated() {
-            var start = line.startIndex
-            while let r = line[start...].range(of: query) {
-                let col = line.distance(from: line.startIndex, to: r.lowerBound) + 1
-                searchResults.append(SearchResult(lineNumber: li+1, column: col,
-                    matchedText: query, isKey: isKeyMatch(line: line, pos: col-1)))
-                start = r.upperBound
-            }
-        }
+        searchQuery = query
+        refreshSearchResults(resetActiveIndex: true)
     }
     func nextSearchResult() {
         guard !searchResults.isEmpty else { return }
@@ -162,6 +162,69 @@ final class EditorViewModel {
         recentFiles.removeAll { $0 == url }
         recentFiles.insert(url, at: 0)
         if recentFiles.count > 10 { recentFiles = Array(recentFiles.prefix(10)) }
+    }
+
+    /// 根据当前搜索词重新计算所有命中的源码位置。
+    ///
+    /// - Parameter resetActiveIndex: 新查询需要回到第一条；文档内容变化时只夹紧现有索引。
+    ///
+    /// `NSTextView` 使用 UTF-16 坐标，而用户看到的行列按 Swift 字符计数展示；
+    /// 因此这里同时保存两套坐标，避免 UI 层各自重复推导后出现偏移。
+    private func refreshSearchResults(resetActiveIndex: Bool) {
+        searchResults = []
+        if resetActiveIndex { activeSearchIndex = 0 }
+        guard !searchQuery.isEmpty else {
+            activeSearchIndex = 0
+            return
+        }
+
+        var start = rawText.startIndex
+        while let range = rawText[start...].range(of: searchQuery) {
+            let location = lineAndColumn(for: range.lowerBound)
+            let nsRange = NSRange(range, in: rawText)
+            let line = lineText(containing: range.lowerBound)
+            searchResults.append(SearchResult(
+                lineNumber: location.line,
+                column: location.column,
+                matchedText: searchQuery,
+                isKey: isKeyMatch(line: line, pos: location.column - 1),
+                range: nsRange
+            ))
+            start = range.upperBound
+        }
+
+        guard !searchResults.isEmpty else {
+            activeSearchIndex = 0
+            return
+        }
+        activeSearchIndex = min(activeSearchIndex, searchResults.count - 1)
+    }
+
+    /// 计算指定字符索引对应的用户可见行列。
+    ///
+    /// - Parameter index: `rawText` 中的字符索引。
+    /// - Returns: 从 1 开始的行列号。
+    private func lineAndColumn(for index: String.Index) -> (line: Int, column: Int) {
+        let prefix = rawText[..<index]
+        let line = prefix.reduce(1) { count, character in
+            character.isNewline ? count + 1 : count
+        }
+        let lineStart = prefix.lastIndex(where: \.isNewline).map {
+            rawText.index(after: $0)
+        } ?? rawText.startIndex
+        return (line, rawText.distance(from: lineStart, to: index) + 1)
+    }
+
+    /// 取出指定位置所在的完整文本行，用于判断命中是否在 key 区域。
+    ///
+    /// - Parameter index: `rawText` 中的字符索引。
+    /// - Returns: 不包含换行符的当前行文本。
+    private func lineText(containing index: String.Index) -> String {
+        let lineStart = rawText[..<index].lastIndex(where: \.isNewline).map {
+            rawText.index(after: $0)
+        } ?? rawText.startIndex
+        let lineEnd = rawText[index...].firstIndex(where: \.isNewline) ?? rawText.endIndex
+        return String(rawText[lineStart..<lineEnd])
     }
 
     private func isKeyMatch(line: String, pos: Int) -> Bool {

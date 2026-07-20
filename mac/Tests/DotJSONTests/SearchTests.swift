@@ -72,4 +72,36 @@ struct SearchTests {
         vm.prevSearchResult()
         #expect(vm.activeSearchIndex == 1) // wraps to last
     }
+
+    @Test func activeSearchResultTracksNavigationAndSourceRange() throws {
+        let vm = EditorViewModel()
+        vm.rawText = "{\n  \"name\": \"Task\",\n  \"description\": \"Task runner\"\n}"
+
+        vm.search("Task")
+
+        let firstResult = try #require(vm.activeSearchResult)
+        #expect(firstResult.lineNumber == 2)
+        #expect(firstResult.column == 12)
+        #expect(firstResult.range.location == 13)
+        #expect(firstResult.range.length == 4)
+
+        vm.nextSearchResult()
+
+        let secondResult = try #require(vm.activeSearchResult)
+        #expect(secondResult.lineNumber == 3)
+        #expect(secondResult.column == 19)
+        #expect(secondResult.range.location == 38)
+    }
+
+    @Test func editingTextRefreshesExistingSearchQuery() {
+        let vm = EditorViewModel()
+        vm.rawText = #"{"name":"Task"}"#
+        vm.search("Task")
+        #expect(vm.searchMatchCount == 1)
+
+        vm.rawText = #"{"name":"Other"}"#
+
+        #expect(vm.searchMatchCount == 0)
+        #expect(vm.activeSearchResult == nil)
+    }
 }

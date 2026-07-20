@@ -56,4 +56,55 @@ struct JSONLPreparserTests {
         let preparser = JSONLPreparser(rawContent: content)
         #expect(preparser.count == 1)
     }
+
+    @Test func skipTrailingEmptyLineWithSpaces() {
+        let content = """
+        {"a":1}
+
+        """
+        let preparser = JSONLPreparser(rawContent: content)
+        #expect(preparser.count == 1)
+        #expect(preparser.lines[0].isValid)
+    }
+
+    @Test func whitespaceOnlyContent() {
+        let preparser = JSONLPreparser(rawContent: "   \n  ")
+        #expect(preparser.count == 0)
+    }
+
+    @Test func linesWithChineseAndEmoji() {
+        let content = """
+        {"名称":"测试","emoji":"😀🎉"}
+        {"值":100}
+        """
+        let preparser = JSONLPreparser(rawContent: content)
+        #expect(preparser.count == 2)
+        #expect(preparser.lines.filter { !$0.isValid }.isEmpty)
+    }
+
+    @Test func veryLongLineIsStillParsed() {
+        let value = String(repeating: "x", count: 10_000)
+        let line = "{\"key\":\"\(value)\"}"
+        let preparser = JSONLPreparser(rawContent: line)
+        #expect(preparser.count == 1)
+        #expect(preparser.lines[0].isValid)
+    }
+
+    @Test func lineWithUnicodeEscapeIsValid() {
+        let line = "{\"emoji\":\"\\ud83d\\ude00\"}"
+        let preparser = JSONLPreparser(rawContent: line)
+        #expect(preparser.count == 1)
+    }
+
+    @Test func outOfRangeIndexReturnsNil() {
+        let preparser = JSONLPreparser(rawContent: #"{"x":1}"#)
+        let result99 = preparser.parseLine(at: 99)
+        #expect(result99 == nil)
+    }
+
+    @Test func unixStyleNewlines() {
+        let content = "{\"a\":1}\n{\"b\":2}\n{\"c\":3}"
+        let preparser = JSONLPreparser(rawContent: content)
+        #expect(preparser.count == 3)
+    }
 }

@@ -2,9 +2,18 @@ import SwiftUI
 import AppKit
 import DotJSONCore
 
+/// 工具栏紧凑布局参数。
+///
+/// 这里集中保存搜索框宽度和控件间距，避免 SwiftUI 外层 frame 与 AppKit intrinsic size 漂移。
+private enum ToolbarMetrics {
+    static let searchFieldWidth: CGFloat = 140
+    static let controlSpacing: CGFloat = 6
+}
+
 struct ToolbarView: ToolbarContent {
     @Environment(EditorViewModel.self) private var viewModel
     @State private var searchText: String = ""
+    @AppStorage("toolbarShowsText") private var toolbarShowsText: Bool = true
 
     var body: some ToolbarContent {
         // ── Left group ──
@@ -78,11 +87,11 @@ struct ToolbarView: ToolbarContent {
 
         // ── Right group: search ──
         ToolbarItem(placement: .principal) {
-            HStack(spacing: 8) {
+            HStack(spacing: ToolbarMetrics.controlSpacing) {
                 NativeToolbarSearchField(text: $searchText) { value in
                     viewModel.search(value)
                 }
-                .frame(width: 220, height: 32)
+                .frame(width: ToolbarMetrics.searchFieldWidth, height: 32)
                 .help("搜索 Key 或值（↑↓切换）")
 
                 if viewModel.searchMatchCount > 0 {
@@ -123,18 +132,19 @@ struct ToolbarView: ToolbarContent {
         .accessibilityLabel(title)
     }
 
-    /// 创建工具栏图标标签，统一按钮和菜单入口的图标尺寸、居中方式与文字隐藏策略。
+    /// 创建工具栏图标标签，统一按钮和菜单入口的图标尺寸、上下排版与文字隐藏策略。
     ///
     /// - Parameters:
     ///   - title: 图标对应的语义标题。
     ///   - systemImage: SF Symbols 图标名称。
-    /// - Returns: 一个只显示图标、但保留语义标题的标签视图。
+    /// - Returns: 一个图标在上、文字在下的紧凑标签视图；用户可通过右键菜单隐藏文字。
     private func toolbarIconLabel(_ title: String, systemImage: String) -> some View {
         Label(title, systemImage: systemImage)
-            .labelStyle(.iconOnly)
-            .font(.system(size: 16, weight: .regular))
-            .frame(width: 30, height: 30, alignment: .center)
+            .labelStyle(ToolbarIconLabelStyle(showsText: toolbarShowsText))
             .contentShape(Rectangle())
+            .contextMenu {
+                Toggle("显示文字", isOn: $toolbarShowsText)
+            }
     }
 
     private func pasteFromClipboard() {
@@ -185,6 +195,34 @@ struct ToolbarView: ToolbarContent {
     }
 }
 
+/// 工具栏主区域的竖排图标标签样式。
+///
+/// 保留 `Label` 语义，让 macOS 在工具栏溢出菜单中仍可使用原生 title/image 表示；
+/// 主工具栏区域则通过样式把图标放在文字上方。
+private struct ToolbarIconLabelStyle: LabelStyle {
+    let showsText: Bool
+
+    /// 生成竖排工具栏标签。
+    ///
+    /// - Parameter configuration: SwiftUI 提供的语义化 `Label` 标题和图标。
+    /// - Returns: 固定尺寸的图标上、文字下标签；隐藏文字时保留紧凑图标画布。
+    func makeBody(configuration: Configuration) -> some View {
+        VStack(spacing: 2) {
+            configuration.icon
+                .font(.system(size: 15, weight: .regular))
+                .frame(width: 18, height: 18, alignment: .center)
+
+            if showsText {
+                configuration.title
+                    .font(.system(size: 9, weight: .regular))
+                    .lineLimit(1)
+            }
+        }
+        .foregroundStyle(.primary)
+        .frame(width: 42, height: showsText ? 42 : 30, alignment: .center)
+    }
+}
+
 /// 使用 AppKit 原生搜索框承接 macOS 工具栏搜索样式。
 ///
 /// 固定 intrinsic size 是必要的：SwiftUI toolbar 会在聚焦或窗口宽度变化时重新询问视图尺寸；
@@ -207,7 +245,7 @@ private struct NativeToolbarSearchField: NSViewRepresentable {
         searchField.action = #selector(Coordinator.submit(_:))
         searchField.sendsSearchStringImmediately = true
         searchField.translatesAutoresizingMaskIntoConstraints = false
-        searchField.widthAnchor.constraint(equalToConstant: FixedToolbarSearchField.preferredWidth).isActive = true
+        searchField.widthAnchor.constraint(equalToConstant: ToolbarMetrics.searchFieldWidth).isActive = true
         searchField.heightAnchor.constraint(equalToConstant: FixedToolbarSearchField.preferredHeight).isActive = true
         return searchField
     }
@@ -277,12 +315,30 @@ private struct NativeToolbarSearchField: NSViewRepresentable {
 
     /// 为 SwiftUI toolbar 提供稳定 intrinsic size 的原生搜索控件。
     final class FixedToolbarSearchField: NSSearchField {
-        static let preferredWidth: CGFloat = 220
         static let preferredHeight: CGFloat = 32
 
         /// 返回固定尺寸，避免 toolbar 在聚焦状态下把搜索框折叠为图标。
         override var intrinsicContentSize: NSSize {
-            NSSize(width: Self.preferredWidth, height: Self.preferredHeight)
+            NSSize(width: ToolbarMetrics.searchFieldWidth, height: Self.preferredHeight)
+        }
+
+        /// 显式处理 Return/Enter，确保用户按回车时也会触发搜索 action。
+        ///
+        /// - Parameter event: AppKit 传入的键盘事件。
+        override func keyDown(with event: NSEvent) {
+            if event.keyCode == 36 || event.keyCode == 76 {
+                performSearchAction()
+                return
+            }
+            super.keyDown(with: event)
+        }
+
+        /// 将搜索提交转发给当前 target/action。
+        ///
+        /// `NSSearchField` 在工具栏中有时只发送实时文本变化事件；这里主动发送 action，
+        /// 让回车和清除按钮走同一个 coordinator 提交流程。
+        func performSearchAction() {
+            sendAction(action, to: target)
         }
     }
 }

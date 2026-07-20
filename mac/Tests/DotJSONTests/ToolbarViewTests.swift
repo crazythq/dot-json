@@ -65,4 +65,71 @@ struct ToolbarViewTests {
         #expect(source.contains("final class FixedToolbarSearchField: NSSearchField"))
         #expect(source.contains("override var intrinsicContentSize: NSSize"))
     }
+
+    /// 验证搜索框尺寸克制，并显式处理回车键提交。
+    ///
+    /// - Throws: 无法读取工具栏源码时抛出文件读取错误。
+    @Test func searchFieldIsCompactAndSubmitsOnReturn() throws {
+        let source = try toolbarSource()
+
+        #expect(source.contains("private enum ToolbarMetrics"))
+        #expect(source.contains("static let searchFieldWidth: CGFloat = 140"))
+        #expect(source.contains("static let controlSpacing: CGFloat = 6"))
+        #expect(source.contains(".frame(width: ToolbarMetrics.searchFieldWidth, height: 32)"))
+        #expect(source.contains("NSSize(width: ToolbarMetrics.searchFieldWidth, height: Self.preferredHeight)"))
+        #expect(source.contains("override func keyDown(with event: NSEvent)"))
+        #expect(source.contains("performSearchAction()"))
+    }
+
+    /// 验证搜索结果导航和搜索框使用同一个紧凑间距。
+    ///
+    /// - Throws: 无法读取工具栏源码时抛出文件读取错误。
+    @Test func searchControlsUseUnifiedCompactSpacing() throws {
+        let source = try toolbarSource()
+
+        #expect(source.contains("HStack(spacing: ToolbarMetrics.controlSpacing)"))
+        #expect(!source.contains("HStack(spacing: 8)"))
+    }
+
+    /// 验证工具栏图标文字使用上下布局，并支持通过持久化开关隐藏文字。
+    ///
+    /// - Throws: 无法读取工具栏源码时抛出文件读取错误。
+    @Test func toolbarIconTitlesStackBelowIconsAndCanBeHidden() throws {
+        let source = try toolbarSource()
+
+        #expect(source.contains("@AppStorage(\"toolbarShowsText\")"))
+        #expect(source.contains("private struct ToolbarIconLabelStyle: LabelStyle"))
+        #expect(source.contains("Label(title, systemImage: systemImage)"))
+        #expect(source.contains(".labelStyle(ToolbarIconLabelStyle(showsText: toolbarShowsText))"))
+        #expect(source.contains("VStack(spacing: 2)"))
+        #expect(source.contains("if showsText"))
+        #expect(source.contains("configuration.title"))
+        #expect(source.contains(".frame(width: 42, height: showsText ? 42 : 30"))
+        #expect(!source.contains(".labelStyle(.titleAndIcon)"))
+        #expect(!source.contains(".labelStyle(.iconOnly)"))
+    }
+
+    /// 验证工具栏自定义标签保留原生 Label 语义，让 macOS 溢出菜单自己绘制居中文字。
+    ///
+    /// - Throws: 无法读取工具栏源码时抛出文件读取错误。
+    @Test func toolbarIconLabelsKeepNativeLabelSemanticsForOverflowMenuRows() throws {
+        let source = try toolbarSource()
+
+        #expect(source.contains("Label(title, systemImage: systemImage)"))
+        #expect(source.contains("configuration.icon"))
+        #expect(source.contains("configuration.title"))
+        #expect(!source.contains(".alignmentGuide(.firstTextBaseline)"))
+        #expect(!source.contains(".alignmentGuide(.lastTextBaseline)"))
+    }
+
+    /// 验证导入和导出入口仍作为真实按钮/菜单保留，不会被文本横排布局挤没。
+    ///
+    /// - Throws: 无法读取工具栏源码时抛出文件读取错误。
+    @Test func importAndExportUseCompactToolbarIconLabels() throws {
+        let source = try toolbarSource()
+
+        #expect(source.contains("toolbarIconButton(\"导入\", systemImage: \"square.and.arrow.down\")"))
+        #expect(source.contains("toolbarIconLabel(\"导出\", systemImage: \"square.and.arrow.up\")"))
+        #expect(source.contains("Label(title, systemImage: systemImage)"))
+    }
 }

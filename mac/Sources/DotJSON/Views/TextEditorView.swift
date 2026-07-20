@@ -10,6 +10,12 @@ final class JSONTextView: NSTextView {
     /// 深色主题下的固定文本颜色。
     fileprivate static let editorTextColor = NSColor(hex: "#d4d4d4")
 
+    /// 普通搜索命中的背景色。
+    static let searchMatchColor = NSColor(hex: "#5a4a1a")
+
+    /// 当前搜索命中的背景色。
+    static let activeSearchMatchColor = NSColor(hex: "#9a5a1a")
+
     /// 测试时可替换的粘贴板；生产环境默认使用系统通用粘贴板。
     var sourcePasteboard: NSPasteboard = .general
 
@@ -79,9 +85,42 @@ final class JSONTextView: NSTextView {
             attributes,
             range: NSRange(location: 0, length: textStorage.length)
         )
+        textStorage.removeAttribute(
+            .backgroundColor,
+            range: NSRange(location: 0, length: textStorage.length)
+        )
         textStorage.endEditing()
         self.selectedRanges = selectedRanges
         invalidateTextLayout()
+    }
+
+    /// 将搜索结果标注到编辑器原文，并滚动到当前命中。
+    ///
+    /// - Parameters:
+    ///   - results: ViewModel 计算出的 UTF-16 原文范围。
+    ///   - activeIndex: 当前命中的结果索引。
+    ///
+    /// 高亮使用 `NSTextView` 的 UTF-16 范围，避免 Swift 字符索引和 AppKit 坐标混用。
+    func applySearchHighlights(results: [SearchResult], activeIndex: Int) {
+        guard let textStorage, textStorage.length > 0 else { return }
+        textStorage.beginEditing()
+        for (index, result) in results.enumerated() {
+            guard result.range.location >= 0,
+                  result.range.length > 0,
+                  NSMaxRange(result.range) <= textStorage.length else {
+                continue
+            }
+            let backgroundColor = index == activeIndex
+                ? Self.activeSearchMatchColor
+                : Self.searchMatchColor
+            textStorage.addAttribute(.backgroundColor, value: backgroundColor, range: result.range)
+        }
+        textStorage.endEditing()
+
+        if results.indices.contains(activeIndex) {
+            scrollRangeToVisible(results[activeIndex].range)
+        }
+        needsDisplay = true
     }
 
     /// 让 TextKit 丢弃旧布局并重绘当前可见文本。
@@ -207,6 +246,8 @@ struct TextEditorView: NSViewRepresentable {
         context.coordinator.synchronizeTextView(
             textView,
             rawText: viewModel.rawText,
+            searchResults: viewModel.searchResults,
+            activeSearchIndex: viewModel.activeSearchIndex,
             in: scrollView
         )
         context.coordinator.lineNumberRulerView?.updateError(
@@ -287,6 +328,8 @@ struct TextEditorView: NSViewRepresentable {
         func synchronizeTextView(
             _ textView: JSONTextView,
             rawText: String,
+            searchResults: [SearchResult] = [],
+            activeSearchIndex: Int = 0,
             in scrollView: NSScrollView
         ) {
             if textView.string != rawText {
@@ -294,6 +337,10 @@ struct TextEditorView: NSViewRepresentable {
             }
             textView.applyThemeAttributesToCurrentText()
             textView.updateDocumentSize(in: scrollView)
+            textView.applySearchHighlights(
+                results: searchResults,
+                activeIndex: activeSearchIndex
+            )
             lastDocumentLayoutViewportSize = scrollView.contentView.bounds.size
             lineNumberRulerView?.needsDisplay = true
         }

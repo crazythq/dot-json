@@ -228,4 +228,44 @@ struct TextEditorViewTests {
         #expect(ruler.errorLineNumber == 2)
         #expect(ruler.errorMessage?.contains("line 2") == true)
     }
+
+    @Test func searchHighlightsAllMatchesAndMarksActiveMatchInEditor() throws {
+        let textView = JSONTextView()
+        textView.configureForScrolling()
+        textView.setPlainText(#"{"name":"Task","description":"Task runner"}"#)
+        let firstRange = NSRange(location: 9, length: 4)
+        let secondRange = NSRange(location: 30, length: 4)
+        let results = [
+            SearchResult(lineNumber: 1, column: 10, matchedText: "Task", isKey: false, range: firstRange),
+            SearchResult(lineNumber: 1, column: 31, matchedText: "Task", isKey: false, range: secondRange),
+        ]
+
+        textView.applySearchHighlights(results: results, activeIndex: 1)
+
+        let firstBackground = try #require(
+            textView.textStorage?.attribute(.backgroundColor, at: firstRange.location, effectiveRange: nil)
+                as? NSColor
+        )
+        let secondBackground = try #require(
+            textView.textStorage?.attribute(.backgroundColor, at: secondRange.location, effectiveRange: nil)
+                as? NSColor
+        )
+        #expect(firstBackground == JSONTextView.searchMatchColor)
+        #expect(secondBackground == JSONTextView.activeSearchMatchColor)
+    }
+
+    @Test func treeViewSourceConfiguresWrappingRowsAndSearchSelection() throws {
+        let sourceURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/DotJSON/Views/TreeView.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+
+        #expect(source.contains("outlineView.usesAutomaticRowHeights = true"))
+        #expect(source.contains("tf.lineBreakMode = .byWordWrapping"))
+        #expect(source.contains("tf.maximumNumberOfLines = 0"))
+        #expect(source.contains("selectAndScrollToActiveSearchResult"))
+        #expect(source.contains("highlightSearchMatches"))
+    }
 }
