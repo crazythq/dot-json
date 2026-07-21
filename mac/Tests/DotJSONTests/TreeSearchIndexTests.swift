@@ -1,3 +1,4 @@
+import DotJSONCore
 import Foundation
 import Testing
 @testable import DotJSON

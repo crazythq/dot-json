@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import DotJSONCLI
+@testable import DotJSON
 
 private enum MemoryIOError: Error {
     case missingFile

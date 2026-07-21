@@ -2,30 +2,56 @@ import SwiftUI
 import AppKit
 
 struct ContentView: View {
-    @Environment(EditorViewModel.self) private var viewModel
+    @Environment(WorkspaceViewModel.self) private var workspace
     @State private var treeSearchText: String = ""
     @State private var treeSearchVisible = false
     @FocusState private var treeSearchFocused: Bool
 
     var body: some View {
-        HSplitView {
-            TextEditorView()
-                .frame(minWidth: 300)
-                .background(Color(hex: "#1e1e1e"))
-            treePanel
-                .frame(minWidth: 200)
-                .background(Color(hex: "#252526"))
+        VStack(spacing: 0) {
+            // 多标签页栏
+            TabBarView()
+
+            // 主编辑区域（根据标签页切换）
+            if let doc = workspace.activeDocument {
+                HSplitView {
+                    TextEditorView()
+                        .frame(minWidth: 300)
+                        .background(Color(hex: "#1e1e1e"))
+                    treePanel
+                        .frame(minWidth: 200)
+                        .background(Color(hex: "#252526"))
+                }
+                .environment(doc)
+            } else {
+                // 所有标签页已关闭时的空状态
+                ZStack {
+                    Color(hex: "#1a1a1a")
+                    VStack(spacing: 12) {
+                        Image(systemName: "doc.text.magnifyingglass")
+                            .font(.system(size: 36))
+                            .foregroundColor(Color(hex: "#454545"))
+                        Text("打开 JSON 文件以开始")
+                            .font(.system(size: 13))
+                            .foregroundColor(Color(hex: "#858585"))
+                        Button("新建文档") {
+                            workspace.newTab()
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
+            }
         }
         .background(Color(hex: "#1a1a1a"))
         .toolbar {
             ToolbarView()
         }
         .onOpenURL { url in
-            openDocument(from: url)
+            workspace.openDocument(from: url)
         }
         .dropDestination(for: URL.self) { urls, _ in
             guard let url = urls.first else { return false }
-            openDocument(from: url)
+            workspace.openDocument(from: url)
             return true
         }
     }
@@ -47,14 +73,15 @@ struct ContentView: View {
             NativeTreeSearchField(
                 text: $treeSearchText,
                 onSearch: { value in
-                    viewModel.searchTree(value)
+                    workspace.activeDocument?.searchTree(value)
                 },
                 onSubmit: { value in
-                    if value == viewModel.treeSearchQuery,
-                       viewModel.treeSearchMatchCount > 0 {
-                        viewModel.nextTreeSearchResult()
+                    guard let doc = workspace.activeDocument else { return }
+                    if value == doc.treeSearchQuery,
+                       doc.treeSearchMatchCount > 0 {
+                        doc.nextTreeSearchResult()
                     } else {
-                        viewModel.searchTree(value)
+                        doc.searchTree(value)
                     }
                 },
                 onCancel: closeTreeSearch
@@ -62,8 +89,8 @@ struct ContentView: View {
             .focused($treeSearchFocused)
             .frame(height: 28)
 
-            if viewModel.treeSearchMatchCount > 0 {
-                Button(action: { viewModel.prevTreeSearchResult() }) {
+            if let doc = workspace.activeDocument, doc.treeSearchMatchCount > 0 {
+                Button(action: { doc.prevTreeSearchResult() }) {
                     Image(systemName: "chevron.up")
                         .font(.system(size: 10, weight: .semibold))
                 }
@@ -71,11 +98,11 @@ struct ContentView: View {
                 .foregroundStyle(Color(hex: "#d4d4d4"))
                 .help("上一个结果")
 
-                Text("\(viewModel.activeTreeSearchIndex + 1)/\(viewModel.treeSearchMatchCount)")
+                Text("\(doc.activeTreeSearchIndex + 1)/\(doc.treeSearchMatchCount)")
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundColor(Color(hex: "#b8b8b8"))
 
-                Button(action: { viewModel.nextTreeSearchResult() }) {
+                Button(action: { doc.nextTreeSearchResult() }) {
                     Image(systemName: "chevron.down")
                         .font(.system(size: 10, weight: .semibold))
                 }
@@ -101,7 +128,6 @@ struct ContentView: View {
         .background(Color(hex: "#2d2d2d"))
     }
 
-    /// 显示右侧搜索栏并在下一次布局完成后聚焦输入框。
     private func showTreeSearch() {
         treeSearchVisible = true
         DispatchQueue.main.async {
@@ -109,23 +135,11 @@ struct ContentView: View {
         }
     }
 
-    /// 关闭右侧搜索栏、清空结果，并触发树视图恢复最新用户展开状态。
     private func closeTreeSearch() {
         treeSearchFocused = false
         treeSearchVisible = false
         treeSearchText = ""
-        viewModel.searchTree("")
-    }
-
-    /// 处理 Finder、Dock 或窗口拖放传入的本地文件 URL。
-    ///
-    /// - Parameter url: 待加载的本地 JSON 文件。
-    private func openDocument(from url: URL) {
-        do {
-            try viewModel.loadDocument(from: url)
-        } catch {
-            viewModel.reportFileError(error)
-        }
+        workspace.activeDocument?.searchTree("")
     }
 }
 
@@ -177,7 +191,6 @@ private struct NativeTreeSearchField: NSViewRepresentable {
         var onSearch: (String) -> Void
         var onSubmit: (String) -> Void
         var onCancel: () -> Void
-        /// 延迟搜索用的 work item，每次击键取消上次的再重新提交。
         private var searchWorkItem: DispatchWorkItem?
 
         init(
@@ -196,7 +209,6 @@ private struct NativeTreeSearchField: NSViewRepresentable {
             guard let field = notification.object as? NSTextField else { return }
             let value = field.stringValue
             syncText(value)
-            // 200ms 防抖：连续输入时不上报，停手后才触发搜索
             searchWorkItem?.cancel()
             let workItem = DispatchWorkItem { [weak self] in
                 self?.onSearch(value)

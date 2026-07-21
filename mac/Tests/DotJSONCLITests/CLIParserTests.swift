@@ -1,5 +1,5 @@
 import Testing
-@testable import DotJSONCLI
+@testable import DotJSON
 
 /// 锁定 CLI 参数解析的稳定合同。
 struct CLIParserTests {

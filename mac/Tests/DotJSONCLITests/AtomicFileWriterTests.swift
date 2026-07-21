@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import DotJSONCLI
+@testable import DotJSON
 
 /// 验证真实文件替换不会丢失源文件权限。
 struct AtomicFileWriterTests {

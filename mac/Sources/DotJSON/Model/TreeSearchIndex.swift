@@ -1,4 +1,5 @@
 import Foundation
+import DotJSONCore
 
 /// JSON 树节点的稳定身份。
 ///

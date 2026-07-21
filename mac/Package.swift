@@ -7,7 +7,6 @@ let package = Package(
     products: [
         .library(name: "DotJSONCore", targets: ["DotJSONCore"]),
         .executable(name: "DotJSON", targets: ["DotJSON"]),
-        .executable(name: "dotjson", targets: ["DotJSONCLI"]),
     ],
     targets: [
         .target(
@@ -19,11 +18,6 @@ let package = Package(
             dependencies: ["DotJSONCore"],
             path: "Sources/DotJSON",
             resources: [.process("Resources")]
-        ),
-        .executableTarget(
-            name: "DotJSONCLI",
-            dependencies: ["DotJSONCore"],
-            path: "Sources/DotJSONCLI"
         ),
         .testTarget(
             name: "DotJSONTests",
@@ -37,7 +31,7 @@ let package = Package(
         ),
         .testTarget(
             name: "DotJSONCLITests",
-            dependencies: ["DotJSONCLI", "DotJSONCore"],
+            dependencies: ["DotJSON", "DotJSONCore"],
             path: "Tests/DotJSONCLITests"
         ),
     ]
