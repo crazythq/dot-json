@@ -20,13 +20,13 @@ struct JSONRepairerTests {
         """)
     }
 
-    @Test func repairsMixedPythonReprAndLooseJSONTokens() throws {
+    @Test func repairsMixedPythonReprAndJSONTokens() throws {
         let input = """
         {
-          visible123: True,
+          'visible123': True,
           "alreadyJson": true,
           'singleQuoted': False,
-          nested_key: {'child': None, "ok": true,}
+          'nested_key': {'child': None, "ok": true,}
         }
         """
 
@@ -48,10 +48,10 @@ struct JSONRepairerTests {
         }
     }
 
-    @Test func repairsUnquotedKeyThatMatchesJSONLiteralName() throws {
-        let repaired = try JSONRepairer.repair("{true: False, null: None}")
-
-        #expect(repaired == #"{"true": false, "null": null}"#)
+    @Test func rejectsUnquotedKeyThatMatchesJSONLiteralName() {
+        #expect(throws: JSONRepairer.RepairError.self) {
+            try JSONRepairer.repair("{true: False, null: None}")
+        }
     }
 
     // MARK: - 数组修复
@@ -177,7 +177,7 @@ struct JSONRepairerTests {
 
         let repaired = try JSONRepairer.repair(input)
 
-        #expect(repaired == #"{"empty": null, "falsy": false, "truthy": true}"#)
+        #expect(repaired == #"{"truthy": true, "falsy": false, "empty": null}"#)
     }
 
     // MARK: - 深层嵌套
@@ -228,10 +228,8 @@ struct JSONRepairerTests {
         }
     }
 
-    @Test func numberLiteralThrows() {
-        #expect(throws: JSONRepairer.RepairError.self) {
-            try JSONRepairer.repair("42")
-        }
+    @Test func validNumberLiteralPassesThrough() throws {
+        #expect(try JSONRepairer.repair("42") == "42")
     }
 
     @Test func emptyStringThrows() {

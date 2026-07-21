@@ -28,6 +28,13 @@ public enum JSONParser {
     /// - Returns: 解析后的 JSON 树。
     /// - Throws: 文本编码或 JSON 语法无效时抛出 `ParseError`。
     public static func parse(_ text: String) throws(ParseError) -> JSONNode {
+        if let byteOffset = StrictJSONSyntax.trailingCommaByteOffset(in: text) {
+            throw .invalidJSON(
+                detail: "Trailing commas are not valid JSON.",
+                byteOffset: byteOffset
+            )
+        }
+
         guard let data = text.data(using: .utf8) else {
             throw .invalidJSON(detail: "Invalid UTF-8 encoding.", byteOffset: nil)
         }
@@ -100,7 +107,8 @@ public enum JSONParser {
     private static func serializeAny(_ value: Any) -> String {
         guard let data = try? JSONSerialization.data(
             withJSONObject: value,
-            options: [.sortedKeys, .withoutEscapingSlashes]
+            // JSONNode 支持顶层标量；显式允许 fragment，避免 Foundation 对 Bool 等值抛出 NSException。
+            options: [.sortedKeys, .withoutEscapingSlashes, .fragmentsAllowed]
         ) else {
             return "null"
         }

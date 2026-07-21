@@ -94,8 +94,7 @@ struct JSONParserTests {
 
     @Test func parseDeeplyNestedObject() throws {
         let json = #"{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":1}}}}}}}}}}"#
-        let node = try JSONParser.parse(json)
-        #expect(node != nil)
+        _ = try JSONParser.parse(json)
     }
 
     @Test func parseLargeArray() throws {
@@ -205,10 +204,8 @@ struct JSONParserTests {
         do {
             _ = try JSONParser.parse(json)
             Issue.record("Expected error")
-        } catch {
-            if let parseError = error as? JSONParser.ParseError {
-                #expect(parseError.errorDescription != nil)
-            }
+        } catch let parseError {
+            #expect(parseError.errorDescription != nil)
         }
     }
 

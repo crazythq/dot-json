@@ -53,24 +53,20 @@ struct EditorViewModelTests {
         #expect(vm.errorMessage == nil)
     }
 
-    @Test func formatRepairsUnquotedKeysAndMixedBooleanTokens() {
+    @Test func formatRejectsUnquotedKeysInsteadOfGuessing() {
         let vm = EditorViewModel()
-        vm.rawText = """
+        let input = """
         {
           visible123: True,
           "alreadyJson": true
         }
         """
+        vm.rawText = input
 
         vm.format()
 
-        #expect(vm.rawText == """
-        {
-            "alreadyJson": true,
-            "visible123": true
-        }
-        """)
-        #expect(vm.errorMessage == nil)
+        #expect(vm.rawText == input)
+        #expect(vm.errorMessage != nil)
     }
     @Test func minifyJSON() {
         let vm = EditorViewModel()

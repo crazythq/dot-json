@@ -140,6 +140,9 @@ enum PythonLiteralRepairer {
         case "True": return "true"
         case "False": return "false"
         case "None": return "null"
+        case "true", "false", "null":
+            // AI 输出常混合 Python 引号与标准 JSON 常量；标准 token 无需修改且不存在歧义。
+            return token
         default:
             throw error("Unsupported Python token: \(token).", input: input, at: start)
         }

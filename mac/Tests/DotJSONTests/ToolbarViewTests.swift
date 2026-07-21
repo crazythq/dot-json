@@ -45,7 +45,7 @@ struct ToolbarViewTests {
         #expect(!source.contains("Label(\"压缩\", systemImage: \"text.aligncenter\")"))
     }
 
-    /// 验证工具栏提供单文件 JSON 导入入口，并复用视图模型的加载与错误反馈契约。
+    /// 验证工具栏提供单文件 JSON 导入入口，并复用工作区的统一文档打开入口。
     ///
     /// - Throws: 无法读取工具栏源码时抛出文件读取错误。
     @Test func toolbarProvidesJSONImportAction() throws {
@@ -54,8 +54,8 @@ struct ToolbarViewTests {
         #expect(source.contains("toolbarIconButton(\"导入\", systemImage: \"square.and.arrow.down\")"))
         #expect(source.contains("private func importDocument()"))
         #expect(source.contains("panel.allowsMultipleSelection = false"))
-        #expect(source.contains("try viewModel.loadDocument(from: url)"))
-        #expect(source.contains("viewModel.reportFileError(error)"))
+        #expect(source.contains("let ws = WorkspaceViewModel.shared"))
+        #expect(source.contains("ws.openDocument(from: url)"))
     }
 
     /// 验证导入和导出入口保留在同一个原生工具栏分组中。

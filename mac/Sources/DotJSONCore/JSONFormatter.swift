@@ -61,6 +61,17 @@ public enum JSONFormatter {
     /// - Returns: 输入对应的 UTF-8 数据。
     /// - Throws: 编码或 JSON 语法无效时抛出错误。
     public static func validate(_ json: String) throws -> Data {
+        if let byteOffset = StrictJSONSyntax.trailingCommaByteOffset(in: json) {
+            throw NSError(
+                domain: "DotJSONCore",
+                code: 2,
+                userInfo: [
+                    NSLocalizedDescriptionKey: "Trailing commas are not valid JSON.",
+                    "NSJSONSerializationErrorIndex": byteOffset,
+                ]
+            )
+        }
+
         guard let data = json.data(using: .utf8) else {
             throw NSError(
                 domain: "DotJSONCore",
