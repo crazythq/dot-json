@@ -15,12 +15,38 @@ struct ToolbarView: ToolbarContent {
         // ── Left group ──
         ToolbarItemGroup {
             Button(action: { workspace.activeDocument?.format() }) {
-                Label("格式化", systemImage: "text.alignleft")
+                Label {
+                    Text("格式化")
+                } icon: {
+                    JSONTransformIconShape(kind: .formatted)
+                        .stroke(
+                            style: StrokeStyle(
+                                lineWidth: 1.35,
+                                lineCap: .round,
+                                lineJoin: .round
+                            )
+                        )
+                        .frame(width: 18, height: 18)
+                        .accessibilityHidden(true)
+                }
             }
             .help("格式化 JSON")
 
             Button(action: { workspace.activeDocument?.minify() }) {
-                Label("压缩", systemImage: "text.aligncenter")
+                Label {
+                    Text("压缩")
+                } icon: {
+                    JSONTransformIconShape(kind: .minified)
+                        .stroke(
+                            style: StrokeStyle(
+                                lineWidth: 1.35,
+                                lineCap: .round,
+                                lineJoin: .round
+                            )
+                        )
+                        .frame(width: 18, height: 18)
+                        .accessibilityHidden(true)
+                }
             }
             .help("压缩 JSON")
 
@@ -142,6 +168,94 @@ struct ToolbarView: ToolbarContent {
                 doc.reportFileError(error)
             }
         }
+    }
+}
+
+/// JSON 格式化与压缩操作共用的结构图标。
+///
+/// 两种状态复用同一对花括号，仅通过内部横线数量表达多行或单行 JSON，
+/// 从而让图标在较小的原生工具栏画布中仍保持成对且可辨识。
+private struct JSONTransformIconShape: Shape {
+    /// 图标所表达的 JSON 输出结构。
+    enum Kind {
+        case formatted
+        case minified
+    }
+
+    let kind: Kind
+
+    /// 在给定画布内生成花括号及内容行路径。
+    ///
+    /// - Parameter rect: SwiftUI 分配给图标的绘制区域。
+    /// - Returns: 使用相对坐标构成的矢量路径，可随工具栏尺寸无损缩放。
+    func path(in rect: CGRect) -> Path {
+        let x = { (value: CGFloat) in rect.minX + rect.width * value }
+        let y = { (value: CGFloat) in rect.minY + rect.height * value }
+        var path = Path()
+
+        // 花括号轮廓保持完全一致，避免两个操作被误认为无关功能。
+        path.move(to: CGPoint(x: x(0.32), y: y(0.06)))
+        path.addCurve(
+            to: CGPoint(x: x(0.18), y: y(0.33)),
+            control1: CGPoint(x: x(0.21), y: y(0.06)),
+            control2: CGPoint(x: x(0.24), y: y(0.25))
+        )
+        path.addCurve(
+            to: CGPoint(x: x(0.10), y: y(0.50)),
+            control1: CGPoint(x: x(0.18), y: y(0.43)),
+            control2: CGPoint(x: x(0.10), y: y(0.42))
+        )
+        path.addCurve(
+            to: CGPoint(x: x(0.18), y: y(0.67)),
+            control1: CGPoint(x: x(0.10), y: y(0.58)),
+            control2: CGPoint(x: x(0.18), y: y(0.57))
+        )
+        path.addCurve(
+            to: CGPoint(x: x(0.32), y: y(0.94)),
+            control1: CGPoint(x: x(0.24), y: y(0.75)),
+            control2: CGPoint(x: x(0.21), y: y(0.94))
+        )
+
+        path.move(to: CGPoint(x: x(0.68), y: y(0.06)))
+        path.addCurve(
+            to: CGPoint(x: x(0.82), y: y(0.33)),
+            control1: CGPoint(x: x(0.79), y: y(0.06)),
+            control2: CGPoint(x: x(0.76), y: y(0.25))
+        )
+        path.addCurve(
+            to: CGPoint(x: x(0.90), y: y(0.50)),
+            control1: CGPoint(x: x(0.82), y: y(0.43)),
+            control2: CGPoint(x: x(0.90), y: y(0.42))
+        )
+        path.addCurve(
+            to: CGPoint(x: x(0.82), y: y(0.67)),
+            control1: CGPoint(x: x(0.90), y: y(0.58)),
+            control2: CGPoint(x: x(0.82), y: y(0.57))
+        )
+        path.addCurve(
+            to: CGPoint(x: x(0.68), y: y(0.94)),
+            control1: CGPoint(x: x(0.76), y: y(0.75)),
+            control2: CGPoint(x: x(0.79), y: y(0.94))
+        )
+
+        let rows: [(y: CGFloat, startX: CGFloat, endX: CGFloat)]
+        switch kind {
+        case .formatted:
+            rows = [
+                (0.32, 0.38, 0.62),
+                (0.50, 0.35, 0.58),
+                (0.68, 0.38, 0.65),
+            ]
+        case .minified:
+            rows = [(0.50, 0.35, 0.65)]
+        }
+
+        for row in rows {
+            path.move(to: CGPoint(x: x(row.startX), y: y(row.y)))
+            path.addLine(to: CGPoint(x: x(row.endX), y: y(row.y)))
+        }
+
+        return path
     }
 }
 

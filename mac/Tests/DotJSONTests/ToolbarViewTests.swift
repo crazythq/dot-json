@@ -29,6 +29,22 @@ struct ToolbarViewTests {
         #expect(!source.contains("Divider()"))
     }
 
+    /// 验证格式化与压缩按钮使用成对的 JSON 结构矢量图标，同时保留原有操作。
+    ///
+    /// - Throws: 无法读取工具栏源码时抛出文件读取错误。
+    @Test func jsonTransformButtonsUsePairedStructureIcons() throws {
+        let source = try toolbarSource()
+
+        #expect(source.contains("JSONTransformIconShape(kind: .formatted)"))
+        #expect(source.contains("JSONTransformIconShape(kind: .minified)"))
+        #expect(source.contains("case formatted"))
+        #expect(source.contains("case minified"))
+        #expect(source.contains("workspace.activeDocument?.format()"))
+        #expect(source.contains("workspace.activeDocument?.minify()"))
+        #expect(!source.contains("Label(\"格式化\", systemImage: \"text.alignleft\")"))
+        #expect(!source.contains("Label(\"压缩\", systemImage: \"text.aligncenter\")"))
+    }
+
     /// 验证工具栏提供单文件 JSON 导入入口，并复用视图模型的加载与错误反馈契约。
     ///
     /// - Throws: 无法读取工具栏源码时抛出文件读取错误。
