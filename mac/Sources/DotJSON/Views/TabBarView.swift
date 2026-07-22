@@ -13,6 +13,7 @@ struct TabBarView: View {
                 ForEach(Array(workspace.tabs.enumerated()), id: \.element.id) { index, tab in
                     TabBarItemView(
                         title: tab.documentTitle,
+                        filePath: tab.fileURL?.path,
                         isModified: tab.isModified,
                         isActive: index == workspace.activeTabIndex,
                         onActivate: { workspace.activateTab(at: index) },
@@ -40,6 +41,7 @@ struct TabBarView: View {
 /// 单个标签页项。
 private struct TabBarItemView: View {
     let title: String
+    let filePath: String?
     let isModified: Bool
     let isActive: Bool
     let onActivate: () -> Void
@@ -59,6 +61,7 @@ private struct TabBarItemView: View {
                 .frame(maxWidth: 140)
             }
             .buttonStyle(.plain)
+            .help(filePath ?? title)
 
             // 关闭按钮在 hover 或激活状态时显示
             if isHovering || isActive {
