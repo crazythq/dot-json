@@ -10,6 +10,9 @@ final class ContextMenuOutlineView: NSOutlineView {
     /// 树拥有焦点并收到 Cmd+F 时调用。
     var onRequestFind: (() -> Void)?
 
+    /// 树拥有焦点并收到 Cmd+C 时调用。
+    var onCopyValue: (() -> Void)?
+
     /// 允许大纲成为第一响应者，使搜索快捷键能按左右面板焦点正确分流。
     override var acceptsFirstResponder: Bool {
         true
@@ -34,18 +37,26 @@ final class ContextMenuOutlineView: NSOutlineView {
         return super.menu(for: event)
     }
 
-    /// 仅在树自身持有键盘焦点时拦截 Cmd+F。
+    /// 仅在树自身持有键盘焦点时拦截 Cmd+F / Cmd+C。
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         guard event.modifierFlags.contains(.command),
-              event.charactersIgnoringModifiers == "f" else {
+              let key = event.charactersIgnoringModifiers else {
             return super.performKeyEquivalent(with: event)
         }
         guard let responder = window?.firstResponder as? NSView,
               self === responder || responder.isDescendant(of: self) else {
             return super.performKeyEquivalent(with: event)
         }
-        onRequestFind?()
-        return true
+        switch key {
+        case "f":
+            onRequestFind?()
+            return true
+        case "c":
+            onCopyValue?()
+            return true
+        default:
+            return super.performKeyEquivalent(with: event)
+        }
     }
 }
 
@@ -73,6 +84,9 @@ struct TreeView: NSViewRepresentable {
         outlineView.dataSource = context.coordinator
         outlineView.menu = context.coordinator.buildMenu()
         outlineView.onRequestFind = onRequestFind
+        outlineView.onCopyValue = { [weak coordinator = context.coordinator] in
+            coordinator?.copySelectedValue()
+        }
         outlineView.target = context.coordinator
         outlineView.doubleAction = #selector(Coordinator.doubleClicked(_:))
 
@@ -86,7 +100,11 @@ struct TreeView: NSViewRepresentable {
     }
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
-        (context.coordinator.outlineView as? ContextMenuOutlineView)?.onRequestFind = onRequestFind
+        let outlineView = (context.coordinator.outlineView as? ContextMenuOutlineView)
+        outlineView?.onRequestFind = onRequestFind
+        outlineView?.onCopyValue = { [weak coordinator = context.coordinator] in
+            coordinator?.copySelectedValue()
+        }
         context.coordinator.reloadIfNeeded(viewModel: viewModel)
     }
 
@@ -168,6 +186,20 @@ struct TreeView: NSViewRepresentable {
 
         @objc private func copyNodeValue() {
             guard let item = contextMenuItem() else { return }
+            copyValue(of: item)
+        }
+
+        /// 复制当前选中行的值（Cmd+C 快捷键入口）。
+        func copySelectedValue() {
+            guard let outlineView,
+                  outlineView.selectedRow >= 0,
+                  let item = outlineView.item(atRow: outlineView.selectedRow) as? JSONTree.Item else {
+                return
+            }
+            copyValue(of: item)
+        }
+
+        private func copyValue(of item: JSONTree.Item) {
             let valueString: String
             if case .string(let value) = item.node {
                 valueString = value
