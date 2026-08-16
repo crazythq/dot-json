@@ -122,6 +122,20 @@ final class EditorViewModel: Identifiable {
         guard let c = try? minifiedOrRepaired(rawText) else { return }
         rawText = c
     }
+    /// 将当前内容转为 Python repr 风格（None/True/False、单引号字符串）。
+    ///
+    /// 输入为标准 JSON 或可修复的 Python 风格文本；无法解析时保持原内容不变。
+    func toPythonLiteral() {
+        guard let node = parseOrRepair() else { return }
+        rawText = PythonLiteralSerializer.serialize(node, indent: indent.rawValue)
+    }
+    /// 将当前内容转为标准 JSON（自动修复 None/True/False、单引号等 Python 风格）。
+    ///
+    /// 输入无法解析或修复时保持原内容不变。
+    func toStandardJSON() {
+        guard let formatted = try? formattedOrRepaired(rawText) else { return }
+        rawText = formatted
+    }
     func clear() {
         treeSearchQuery = ""
         treeSearchMatches = []
@@ -329,16 +343,44 @@ final class EditorViewModel: Identifiable {
         }
         do {
             let parsedRoot = try JSONParser.parse(rawText)
-            treeRoot = parsedRoot
-            errorMessage = nil
-            errorLineNumber = 0
-            scheduleTreeSearchIndex(for: parsedRoot)
+            applyParsed(parsedRoot)
         } catch {
+            // 直接解析失败时尝试 Python 风格修复；修复成功则按修复后的结构显示，
+            // 让 None/True/False、单引号等内容仍能在右侧树中浏览，而不是报错。
+            if let repaired = try? JSONRepairer.repair(rawText),
+               let repairedRoot = try? JSONParser.parse(repaired) {
+                applyParsed(repairedRoot)
+                return
+            }
             treeRoot = nil
             errorMessage = error.localizedDescription
             errorLineNumber = parseErrorLine(from: error)
             scheduleTreeSearchIndex(for: nil)
         }
+    }
+
+    /// 应用一次成功解析的结果，并清理错误状态。
+    ///
+    /// - Parameter root: 解析出的 JSON 树。
+    private func applyParsed(_ root: JSONNode) {
+        treeRoot = root
+        errorMessage = nil
+        errorLineNumber = 0
+        scheduleTreeSearchIndex(for: root)
+    }
+
+    /// 解析当前文本；标准 JSON 解析失败时先修复 Python 风格再解析。
+    ///
+    /// - Returns: 解析出的 JSON 树；无法解析或修复时返回 `nil`。
+    private func parseOrRepair() -> JSONNode? {
+        if let node = try? JSONParser.parse(rawText) {
+            return node
+        }
+        guard let repaired = try? JSONRepairer.repair(rawText),
+              let node = try? JSONParser.parse(repaired) else {
+            return nil
+        }
+        return node
     }
 
     private func scheduleTreeSearchIndex(for root: JSONNode?) {

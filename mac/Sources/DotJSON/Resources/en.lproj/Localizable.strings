@@ -3,3 +3,7 @@
 "tab.context.closeAll" = "Close All Tabs";
 "tab.context.rename" = "Rename";
 "tab.context.duplicate" = "Duplicate";
+"toolbar.convert" = "Convert";
+"toolbar.convert.toPython" = "To Python Format";
+"toolbar.convert.toJSON" = "To Standard JSON";
+"toolbar.convert.help" = "Convert between Python and standard JSON";

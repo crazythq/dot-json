@@ -295,6 +295,59 @@ struct EditorViewModelTests {
         #expect(!vm.isModified)
     }
 
+    // MARK: - Python / 标准 JSON 互转
+
+    /// 标准 JSON 可转为 Python repr 风格，且右侧树仍正常解析显示。
+    @Test func toPythonLiteralConvertsStandardJSONToPythonStyle() {
+        let vm = EditorViewModel()
+        vm.rawText = #"{"a": null, "b": true, "c": false, "d": "x"}"#
+
+        vm.toPythonLiteral()
+
+        #expect(vm.rawText.contains("None"))
+        #expect(vm.rawText.contains("True"))
+        #expect(vm.rawText.contains("False"))
+        #expect(vm.rawText.contains("'x'"))
+        #expect(vm.treeRoot != nil)
+        #expect(vm.errorMessage == nil)
+    }
+
+    /// Python 风格文本可转回标准 JSON，None/True/False 自动修复。
+    @Test func toStandardJSONConvertsPythonStyleToStandardJSON() {
+        let vm = EditorViewModel()
+        vm.rawText = "{'visible123': True, 'missing': None,}"
+
+        vm.toStandardJSON()
+
+        #expect(vm.rawText == """
+        {
+            "missing": null,
+            "visible123": true
+        }
+        """)
+        #expect(vm.errorMessage == nil)
+    }
+
+    /// Python 风格内容（单引号、None/True/False）在编辑时直接可解析，不显示错误。
+    @Test func pythonStyleContentDisplaysTreeWithoutError() {
+        let vm = EditorViewModel()
+        vm.rawText = "{'visible123': True, 'missing': None}"
+
+        #expect(vm.treeRoot != nil)
+        #expect(vm.errorMessage == nil)
+    }
+
+    /// 无法解析或修复的内容在转换时保持不变。
+    @Test func toPythonLiteralKeepsInvalidTextUnchanged() {
+        let vm = EditorViewModel()
+        let input = "{bad"
+        vm.rawText = input
+
+        vm.toPythonLiteral()
+
+        #expect(vm.rawText == input)
+    }
+
     // MARK: - Paste
     @Test func pasteValidJSONAutoFormats() {
         let vm = EditorViewModel()

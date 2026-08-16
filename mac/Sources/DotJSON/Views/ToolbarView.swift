@@ -62,6 +62,32 @@ struct ToolbarView: ToolbarContent {
             }
         }
 
+        // ── Python / 标准 JSON 互转 ──
+        ToolbarItem {
+            ControlGroup {
+                Menu {
+                    Button {
+                        workspace.activeDocument?.toPythonLiteral()
+                    } label: {
+                        Text("toolbar.convert.toPython", bundle: .module)
+                    }
+                    Button {
+                        workspace.activeDocument?.toStandardJSON()
+                    } label: {
+                        Text("toolbar.convert.toJSON", bundle: .module)
+                    }
+                } label: {
+                    toolbarIconLabel(
+                        String(localized: "toolbar.convert", bundle: .module),
+                        systemImage: "arrow.left.arrow.right"
+                    )
+                }
+                .help(Text("toolbar.convert.help", bundle: .module))
+            }
+            .controlGroupStyle(.navigation)
+            .controlSize(.large)
+        }
+
         // ── 文件操作 ──
         ToolbarItem {
             ControlGroup {
