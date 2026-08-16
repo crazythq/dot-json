@@ -34,6 +34,38 @@ struct TextEditorViewTests {
         #expect(textView.string == "original")
     }
 
+    /// 回归测试：非空文档粘贴时只在光标处插入，绝不替换/清空整个标签页内容。
+    @Test func pasteInsertsAtCursorInNonEmptyDocument() {
+        let pasteboard = NSPasteboard(name: .init("DotJSONTests.InsertPaste"))
+        pasteboard.clearContents()
+        pasteboard.setString(#"{"pasted":true}"#, forType: .string)
+        let textView = JSONTextView()
+        textView.sourcePasteboard = pasteboard
+        textView.string = #"{"existing":1}"#
+        // 光标放到文本末尾。
+        textView.setSelectedRange(NSRange(location: textView.string.count, length: 0))
+
+        textView.paste(nil)
+
+        #expect(textView.string == #"{"existing":1}{"pasted":true}"#)
+    }
+
+    /// 回归测试：非空文档粘贴时，已有选区被剪贴板内容替换，其余内容保持不变。
+    @Test func pasteReplacesOnlySelectedRangeInNonEmptyDocument() {
+        let pasteboard = NSPasteboard(name: .init("DotJSONTests.ReplacePaste"))
+        pasteboard.clearContents()
+        pasteboard.setString("X", forType: .string)
+        let textView = JSONTextView()
+        textView.sourcePasteboard = pasteboard
+        textView.string = "hello world"
+        // 选中中间的 "lo wo"。
+        textView.setSelectedRange(NSRange(location: 3, length: 5))
+
+        textView.paste(nil)
+
+        #expect(textView.string == "helXrld")
+    }
+
     /// 回归测试：多标签页场景下，粘贴与输入必须写入 Coordinator 当前持有的
     /// ViewModel（即当前激活标签页），而不是创建时捕获的第一个标签页。
     ///

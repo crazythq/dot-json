@@ -174,11 +174,19 @@ final class JSONTextView: NSTextView {
 
     /// 读取纯文本并转交 ViewModel；没有纯文本时不执行任何操作。
     ///
+    /// 空文档时整体粘贴并交由 ViewModel 自动格式化（粘贴 JSON 文件内容的常见
+    /// 路径）；非空文档时只在光标/选区处插入，绝不替换整个标签页的内容。
+    ///
     /// - Parameter sender: 触发粘贴动作的菜单项或响应链对象。
     override func paste(_ sender: Any?) {
         // JSON 编辑器只接受纯文本，不能让富文本通过父类实现绕过格式化与校验。
         guard let text = sourcePasteboard.string(forType: .string) else { return }
-        onPaste?(text)
+        let isEmptyDocument = string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if isEmptyDocument {
+            onPaste?(text)
+        } else {
+            insertText(text, replacementRange: selectedRange)
+        }
     }
 
     /// 拦截 ⌘F，弹出原生查找栏。
