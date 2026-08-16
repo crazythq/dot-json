@@ -73,6 +73,8 @@ struct WorkspaceViewModelTests {
         let duplicated = ws.tabs[countBefore + 1]
         #expect(ws.tabs.count == countBefore + 2)
         #expect(duplicated.rawText == #"{"k":1}"#)
+        #expect(duplicated.treeRoot != nil)
+        #expect(duplicated.hasValidJSONContent)
         #expect(duplicated.fileURL == nil)
         #expect(duplicated.isModified)
         #expect(duplicated.untitledNumber > 0)
