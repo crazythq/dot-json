@@ -34,6 +34,50 @@ struct TextEditorViewTests {
         #expect(textView.string == "original")
     }
 
+    /// 回归测试：多标签页场景下，粘贴与输入必须写入 Coordinator 当前持有的
+    /// ViewModel（即当前激活标签页），而不是创建时捕获的第一个标签页。
+    ///
+    /// SwiftUI 切换标签页时会复用同一个 Coordinator（makeCoordinator 只在首次
+    /// 创建时执行），如果 updateNSView 不同步环境，onPaste/textDidChange 的
+    /// 回调会一直指向第一个标签页的 ViewModel。
+    @Test func pasteAndTypingRouteToCoordinatorCurrentViewModel() {
+        let firstTab = EditorViewModel()
+        let secondTab = EditorViewModel()
+        firstTab.rawText = #"{"tab":1}"#
+        secondTab.rawText = #"{"tab":2}"#
+
+        // 模拟 makeCoordinator 在第一个标签页激活时创建。
+        let coordinator = TextEditorView.Coordinator(viewModel: firstTab)
+        // 模拟 updateNSView 在切换标签页后同步环境（修复点）。
+        coordinator.viewModel = secondTab
+
+        // 粘贴应写入当前标签页。
+        coordinator.pasteAndFormat(#"{"pasted":true}"#)
+        #expect(firstTab.rawText == #"{"tab":1}"#)
+        #expect(secondTab.rawText.contains("\"pasted\""))
+
+        // 输入同样应写入当前标签页。
+        let textView = JSONTextView()
+        coordinator.textView = textView
+        textView.string = #"{"typed":1}"#
+        coordinator.textDidChange(Notification(name: NSText.didChangeNotification))
+        #expect(!firstTab.rawText.contains("\"typed\""))
+        #expect(secondTab.rawText.contains("\"typed\""))
+    }
+
+    /// 回归测试（源码级）：updateNSView 必须把最新环境同步给 Coordinator。
+    /// 若该同步被移除，多标签页下的粘贴/输入会再次路由到第一个标签页。
+    @Test func updateNSViewSyncsCoordinatorToCurrentEnvironment() throws {
+        let sourceURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/DotJSON/Views/TextEditorView.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+
+        #expect(source.contains("context.coordinator.viewModel = viewModel"))
+    }
+
     @Test func textViewConfiguresAResizableScrollableDocument() {
         let textView = JSONTextView()
 

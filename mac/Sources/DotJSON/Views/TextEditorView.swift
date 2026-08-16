@@ -286,6 +286,11 @@ struct TextEditorView: NSViewRepresentable {
     func updateNSView(_ containerView: NSView, context: Context) {
         guard let textView = context.coordinator.textView,
               let scrollView = context.coordinator.scrollView else { return }
+        // 切换标签页时环境中的 EditorViewModel 会变化，但 SwiftUI 会复用同一个
+        // Coordinator（makeCoordinator 只在首次创建时捕获当时的 viewModel）。
+        // 必须在这里把最新环境同步给 Coordinator，否则 onPaste/textDidChange
+        // 等回调会一直路由到第一个标签页的 ViewModel。
+        context.coordinator.viewModel = viewModel
         context.coordinator.synchronizeTextView(
             textView,
             rawText: viewModel.rawText,
