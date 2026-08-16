@@ -3,6 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "DotJSON",
+    defaultLocalization: "en",
     platforms: [.macOS(.v14)],
     products: [
         .library(name: "DotJSONCore", targets: ["DotJSONCore"]),

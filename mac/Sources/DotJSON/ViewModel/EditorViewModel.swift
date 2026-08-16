@@ -52,6 +52,8 @@ final class EditorViewModel: Identifiable {
     var fileURL: URL? = nil
     /// 未命名标签页的序号（0 表示未分配，仅文件标签页或默认值时为 0）。
     var untitledNumber: Int = 0
+    /// 用户双击标签页自定义的名称；为空时回退到默认标题。
+    var customTitle: String? = nil
     var autoFormatOnPaste = true
     var searchResults: [SearchResult] = []
     var activeSearchIndex: Int = 0
@@ -78,6 +80,9 @@ final class EditorViewModel: Identifiable {
     var treeSearchMatchCount: Int { treeSearchMatches.count }
     /// 标签页标题：文件标签页显示文件名，未命名标签页显示 "Untitled N"。
     var documentTitle: String {
+        if let customTitle {
+            return customTitle
+        }
         if let url = fileURL {
             return url.lastPathComponent
         }
@@ -101,6 +106,14 @@ final class EditorViewModel: Identifiable {
     }
 
     // MARK: - Actions
+    /// 设置标签页的自定义显示名称；空字符串会清除自定义名称，恢复默认标题。
+    ///
+    /// - Parameter title: 自定义标题（首尾空白会被裁剪）。
+    func rename(to title: String) {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        customTitle = trimmed.isEmpty ? nil : trimmed
+    }
+
     func format() {
         guard let f = try? formattedOrRepaired(rawText) else { return }
         rawText = f

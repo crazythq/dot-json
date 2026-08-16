@@ -129,6 +129,80 @@ final class WorkspaceViewModel {
         persistSession()
     }
 
+    /// 重命名指定标签页的显示标题。
+    func renameTab(at index: Int, to title: String) {
+        guard tabs.indices.contains(index) else { return }
+        tabs[index].rename(to: title)
+    }
+
+    /// 关闭除指定标签页外的所有标签页；含未保存内容时统一弹窗确认一次。
+    func closeOtherTabs(at index: Int) {
+        guard tabs.indices.contains(index) else { return }
+        closeTabs(at: Array(tabs.indices.filter { $0 != index }))
+    }
+
+    /// 关闭所有标签页；含未保存内容时统一弹窗确认一次。
+    func closeAllTabs() {
+        closeTabs(at: Array(tabs.indices))
+    }
+
+    /// 复制指定标签页的全部内容到剪贴板。
+    func copyTabContent(at index: Int) {
+        guard tabs.indices.contains(index) else { return }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(tabs[index].rawText, forType: .string)
+    }
+
+    /// 批量关闭标签页；任一目标含未保存的有效 JSON 内容时先统一确认。
+    private func closeTabs(at targets: [Int]) {
+        guard !targets.isEmpty else { return }
+        let confirmedCount = targets.filter { needsCloseConfirmation(tabs[$0]) }.count
+        guard confirmedCount > 0 else {
+            closeTabsDirectly(at: targets)
+            return
+        }
+        presentBatchCloseConfirmation(
+            targetCount: targets.count,
+            confirmedCount: confirmedCount
+        ) {
+            self.closeTabsDirectly(at: targets)
+        }
+    }
+
+    /// 从高索引到低索引依次关闭，避免索引失效。
+    private func closeTabsDirectly(at targets: [Int]) {
+        for index in targets.sorted(by: >) {
+            closeTab(at: index)
+        }
+    }
+
+    /// 批量关闭的确认弹窗；优先以 sheet 形式挂在当前窗口上。
+    private func presentBatchCloseConfirmation(
+        targetCount: Int,
+        confirmedCount: Int,
+        completion: @escaping () -> Void
+    ) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = targetCount == 1
+            ? "关闭标签页？"
+            : "关闭 \(targetCount) 个标签页？"
+        alert.informativeText = "其中 \(confirmedCount) 个标签页包含符合 JSON 格式且尚未保存的内容，关闭后将丢失。"
+        alert.addButton(withTitle: "关闭")
+        alert.addButton(withTitle: "取消")
+
+        if let window = NSApp.keyWindow {
+            alert.beginSheetModal(for: window) { response in
+                guard response == .alertFirstButtonReturn else { return }
+                completion()
+            }
+        } else {
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+            completion()
+        }
+    }
+
     // MARK: - Document Operations
 
     func openDocument(from url: URL) {

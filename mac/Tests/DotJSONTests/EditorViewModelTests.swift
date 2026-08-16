@@ -262,6 +262,38 @@ struct EditorViewModelTests {
         vm.rawText = #"{"k":1}"#
         #expect(vm.hasValidJSONContent)
     }
+    @Test func renameSetsCustomTitle() {
+        let vm = EditorViewModel()
+        vm.rename(to: "我的配置")
+        #expect(vm.documentTitle == "我的配置")
+    }
+    @Test func renameTrimsWhitespace() {
+        let vm = EditorViewModel()
+        vm.rename(to: "  配置  ")
+        #expect(vm.documentTitle == "配置")
+    }
+    @Test func renameWithEmptyStringRevertsToDefaultTitle() {
+        let vm = EditorViewModel()
+        vm.untitledNumber = 3
+        vm.rename(to: "自定义")
+        #expect(vm.documentTitle == "自定义")
+        vm.rename(to: "   ")
+        #expect(vm.documentTitle == "Untitled 3")
+    }
+    @Test func renameOverridesFilenameButKeepsFileURL() throws {
+        let vm = EditorViewModel()
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("t_rename.json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try #"{"k":1}"#.write(to: url, atomically: true, encoding: .utf8)
+        try vm.load(from: url)
+
+        vm.rename(to: "业务配置")
+
+        #expect(vm.documentTitle == "业务配置")
+        #expect(vm.fileURL == url)
+        #expect(!vm.isModified)
+    }
 
     // MARK: - Paste
     @Test func pasteValidJSONAutoFormats() {

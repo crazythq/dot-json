@@ -12,12 +12,10 @@ struct TabBarView: View {
             HStack(spacing: 0) {
                 ForEach(Array(workspace.tabs.enumerated()), id: \.element.id) { index, tab in
                     TabBarItemView(
+                        index: index,
                         title: tab.documentTitle,
                         filePath: tab.fileURL?.path,
-                        isModified: tab.isModified,
-                        isActive: index == workspace.activeTabIndex,
-                        onActivate: { workspace.activateTab(at: index) },
-                        onClose: { workspace.requestCloseTab(at: index) }
+                        isModified: tab.isModified
                     )
                 }
                 // 新建标签页按钮
@@ -40,32 +38,61 @@ struct TabBarView: View {
 
 /// 单个标签页项。
 private struct TabBarItemView: View {
+    @Environment(WorkspaceViewModel.self) private var workspace
+
+    let index: Int
     let title: String
     let filePath: String?
     let isModified: Bool
-    let isActive: Bool
-    let onActivate: () -> Void
-    let onClose: () -> Void
 
     @State private var isHovering = false
+    @State private var isEditingTitle = false
+    @State private var editingTitle = ""
+    @FocusState private var titleFieldFocused: Bool
+
+    private var isActive: Bool { index == workspace.activeTabIndex }
 
     var body: some View {
         HStack(spacing: 4) {
-            Button(action: onActivate) {
-                HStack(spacing: 4) {
-                    Text(isModified ? "• \(title)" : title)
-                        .font(.system(size: 11))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+            if isEditingTitle {
+                TextField("命名", text: $editingTitle)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color(hex: "#ffffff"))
+                    .focused($titleFieldFocused)
+                    .frame(maxWidth: 140)
+                    .padding(.vertical, 2)
+                    .padding(.horizontal, 4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color(hex: "#2d2d2d"))
+                    )
+                    .onAppear { titleFieldFocused = true }
+                    .onSubmit { commitRename() }
+                    .onExitCommand { cancelRename() }
+                    .onChange(of: titleFieldFocused) { _, focused in
+                        if !focused { commitRename() }
+                    }
+            } else {
+                Button(action: { workspace.activateTab(at: index) }) {
+                    HStack(spacing: 4) {
+                        Text(isModified ? "• \(title)" : title)
+                            .font(.system(size: 11))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                    .frame(maxWidth: 140)
                 }
-                .frame(maxWidth: 140)
+                .buttonStyle(.plain)
+                .help(filePath ?? title)
+                .simultaneousGesture(
+                    TapGesture(count: 2).onEnded { beginRename() }
+                )
             }
-            .buttonStyle(.plain)
-            .help(filePath ?? title)
 
             // 关闭按钮在 hover 或激活状态时显示
             if isHovering || isActive {
-                Button(action: onClose) {
+                Button(action: { workspace.requestCloseTab(at: index) }) {
                     Image(systemName: "xmark")
                         .font(.system(size: 9, weight: .semibold))
                         .frame(width: 14, height: 14)
@@ -86,5 +113,55 @@ private struct TabBarItemView: View {
                 isHovering = hovering
             }
         }
+        .contextMenu {
+            Button {
+                workspace.requestCloseTab(at: index)
+            } label: {
+                Text("tab.context.closeCurrent", bundle: .module)
+            }
+            Button {
+                workspace.closeOtherTabs(at: index)
+            } label: {
+                Text("tab.context.closeOthers", bundle: .module)
+            }
+            Button {
+                workspace.closeAllTabs()
+            } label: {
+                Text("tab.context.closeAll", bundle: .module)
+            }
+            Divider()
+            Button {
+                beginRename()
+            } label: {
+                Text("tab.context.rename", bundle: .module)
+            }
+            Button {
+                workspace.copyTabContent(at: index)
+            } label: {
+                Text("tab.context.copy", bundle: .module)
+            }
+        }
+    }
+
+    /// 双击进入重命名模式，预填当前标题。
+    private func beginRename() {
+        guard !isEditingTitle else { return }
+        editingTitle = title
+        isEditingTitle = true
+    }
+
+    /// 提交重命名（回车或失焦时触发）；标题未变化或为空时不写入。
+    private func commitRename() {
+        let trimmed = editingTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed != title {
+            workspace.renameTab(at: index, to: trimmed)
+        }
+        isEditingTitle = false
+    }
+
+    /// 取消重命名（Esc）：恢复原标题后退出编辑。
+    private func cancelRename() {
+        editingTitle = title
+        isEditingTitle = false
     }
 }

@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import AppKit
 @testable import DotJSON
 
 @MainActor
@@ -20,6 +21,57 @@ struct WorkspaceViewModelTests {
         #expect(second.untitledNumber == first.untitledNumber + 1)
         #expect(first.documentTitle == "Untitled \(first.untitledNumber)")
         #expect(second.documentTitle == "Untitled \(second.untitledNumber)")
+    }
+
+    /// 通过 Workspace 重命名后，标签页标题更新为自定义名称。
+    @Test func renameTabUpdatesTitle() {
+        let ws = WorkspaceViewModel()
+        let countBefore = ws.tabs.count
+        ws.newTab()
+
+        ws.renameTab(at: countBefore, to: "业务配置")
+
+        #expect(ws.tabs[countBefore].documentTitle == "业务配置")
+    }
+
+    /// 关闭其他页后只保留目标标签页。
+    @Test func closeOtherTabsKeepsOnlyTarget() {
+        let ws = WorkspaceViewModel()
+        let countBefore = ws.tabs.count
+        ws.newTab()
+        ws.newTab()
+        ws.newTab()
+        let targetIndex = countBefore + 1
+        let target = ws.tabs[targetIndex]
+
+        ws.closeOtherTabs(at: targetIndex)
+
+        #expect(ws.tabs.count == 1)
+        #expect(ws.tabs.first === target)
+    }
+
+    /// 关闭所有页后标签页为空。
+    @Test func closeAllTabsClosesEverything() {
+        let ws = WorkspaceViewModel()
+        ws.newTab()
+        ws.newTab()
+
+        ws.closeAllTabs()
+
+        #expect(ws.tabs.isEmpty)
+        #expect(ws.activeTabIndex == -1)
+    }
+
+    /// 复制标签页内容写入剪贴板。
+    @Test func copyTabContentCopiesRawText() {
+        let ws = WorkspaceViewModel()
+        let countBefore = ws.tabs.count
+        ws.newTab()
+        ws.tabs[countBefore].rawText = #"{"k":1}"#
+
+        ws.copyTabContent(at: countBefore)
+
+        #expect(NSPasteboard.general.string(forType: .string) == #"{"k":1}"#)
     }
 
     // MARK: - 关闭二次确认
