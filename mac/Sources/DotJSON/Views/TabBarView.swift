@@ -17,7 +17,7 @@ struct TabBarView: View {
                         isModified: tab.isModified,
                         isActive: index == workspace.activeTabIndex,
                         onActivate: { workspace.activateTab(at: index) },
-                        onClose: { workspace.closeTab(at: index) }
+                        onClose: { workspace.requestCloseTab(at: index) }
                     )
                 }
                 // 新建标签页按钮

@@ -239,6 +239,29 @@ struct EditorViewModelTests {
         vm.fileURL = URL(fileURLWithPath: "/test/data.json")
         #expect(vm.documentTitle == "data.json")
     }
+    @Test func untitledTabTitleIncludesNumberWhenAssigned() {
+        let vm = EditorViewModel()
+        vm.untitledNumber = 2
+        #expect(vm.documentTitle == "Untitled 2")
+    }
+    @Test func untitledTabTitleFallsBackToPlainUntitled() {
+        let vm = EditorViewModel()
+        #expect(vm.documentTitle == "Untitled")
+    }
+    @Test func filenameTakesPrecedenceOverUntitledNumber() {
+        let vm = EditorViewModel()
+        vm.untitledNumber = 5
+        vm.fileURL = URL(fileURLWithPath: "/test/data.json")
+        #expect(vm.documentTitle == "data.json")
+    }
+    @Test func hasValidJSONContentReflectsParseState() {
+        let vm = EditorViewModel()
+        #expect(!vm.hasValidJSONContent)
+        vm.rawText = "{bad"
+        #expect(!vm.hasValidJSONContent)
+        vm.rawText = #"{"k":1}"#
+        #expect(vm.hasValidJSONContent)
+    }
 
     // MARK: - Paste
     @Test func pasteValidJSONAutoFormats() {

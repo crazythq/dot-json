@@ -12,6 +12,11 @@ struct DotJSONCommands: Commands {
 
             Button("Open...") { openFile() }
                 .keyboardShortcut("o", modifiers: .command)
+
+            Divider()
+
+            Button("关闭标签页") { workspace?.closeActiveTab() }
+                .keyboardShortcut("w", modifiers: .command)
         }
 
         CommandGroup(after: .saveItem) {

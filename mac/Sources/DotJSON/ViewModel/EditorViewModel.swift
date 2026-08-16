@@ -50,6 +50,8 @@ final class EditorViewModel: Identifiable {
         }
     }
     var fileURL: URL? = nil
+    /// 未命名标签页的序号（0 表示未分配，仅文件标签页或默认值时为 0）。
+    var untitledNumber: Int = 0
     var autoFormatOnPaste = true
     var searchResults: [SearchResult] = []
     var activeSearchIndex: Int = 0
@@ -74,7 +76,15 @@ final class EditorViewModel: Identifiable {
     var isModified: Bool { rawText != savedText }
     var searchMatchCount: Int { searchResults.count }
     var treeSearchMatchCount: Int { treeSearchMatches.count }
-    var documentTitle: String { fileURL?.lastPathComponent ?? "Untitled" }
+    /// 标签页标题：文件标签页显示文件名，未命名标签页显示 "Untitled N"。
+    var documentTitle: String {
+        if let url = fileURL {
+            return url.lastPathComponent
+        }
+        return untitledNumber > 0 ? "Untitled \(untitledNumber)" : "Untitled"
+    }
+    /// 当前内容是否为可解析的非空 JSON（用于关闭前的二次确认）。
+    var hasValidJSONContent: Bool { treeRoot != nil }
     var activeSearchResult: SearchResult? {
         guard searchResults.indices.contains(activeSearchIndex) else { return nil }
         return searchResults[activeSearchIndex]

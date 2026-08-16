@@ -24,6 +24,8 @@ final class WorkspaceViewModel {
     var activeTabIndex: Int = -1
     var recentFiles: [URL] = []
     private var isRestoringSession = true
+    /// 下一个未命名标签页使用的序号（本次运行内单调递增）。
+    private var nextUntitledNumber = 1
 
     var activeDocument: EditorViewModel? {
         guard tabs.indices.contains(activeTabIndex) else { return nil }
@@ -42,9 +44,55 @@ final class WorkspaceViewModel {
 
     func newTab() {
         let vm = EditorViewModel()
+        vm.untitledNumber = nextUntitledNumber
+        nextUntitledNumber += 1
         tabs.append(vm)
         activeTabIndex = tabs.count - 1
         persistSession()
+    }
+
+    /// 关闭指定标签页；若内容符合 JSON 格式且有未保存修改，先弹窗二次确认。
+    func requestCloseTab(at index: Int) {
+        guard tabs.indices.contains(index) else { return }
+        let tab = tabs[index]
+        guard needsCloseConfirmation(tab) else {
+            closeTab(at: index)
+            return
+        }
+        presentCloseConfirmation(for: tab, at: index)
+    }
+
+    /// 关闭当前激活的标签页（Cmd+W 入口）。
+    func closeActiveTab() {
+        guard tabs.indices.contains(activeTabIndex) else { return }
+        // 确认弹窗打开时忽略重复的 ⌘W，避免叠出多个弹窗。
+        if let window = NSApp.keyWindow, window.attachedSheet != nil { return }
+        requestCloseTab(at: activeTabIndex)
+    }
+
+    /// 判断关闭标签页是否需要二次确认：仅当内容可解析为 JSON 且存在未保存修改时。
+    func needsCloseConfirmation(_ tab: EditorViewModel) -> Bool {
+        tab.isModified && tab.hasValidJSONContent
+    }
+
+    /// 以警告弹窗确认后关闭标签页；优先以 sheet 形式挂在当前窗口上。
+    private func presentCloseConfirmation(for tab: EditorViewModel, at index: Int) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "关闭“\(tab.documentTitle)”？"
+        alert.informativeText = "该标签页包含符合 JSON 格式且尚未保存的内容，关闭后将丢失。"
+        alert.addButton(withTitle: "关闭")
+        alert.addButton(withTitle: "取消")
+
+        if let window = NSApp.keyWindow {
+            alert.beginSheetModal(for: window) { response in
+                guard response == .alertFirstButtonReturn else { return }
+                self.closeTab(at: index)
+            }
+        } else {
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+            closeTab(at: index)
+        }
     }
 
     func openTab(from url: URL) throws {
