@@ -1,6 +1,5 @@
 import Testing
 import Foundation
-import AppKit
 @testable import DotJSON
 
 @MainActor
@@ -62,16 +61,41 @@ struct WorkspaceViewModelTests {
         #expect(ws.activeTabIndex == -1)
     }
 
-    /// 复制标签页内容写入剪贴板。
-    @Test func copyTabContentCopiesRawText() {
+    /// 复制标签页生成内容相同的新标签页并激活。
+    @Test func duplicateTabCreatesNewTabWithSameContent() {
         let ws = WorkspaceViewModel()
         let countBefore = ws.tabs.count
         ws.newTab()
         ws.tabs[countBefore].rawText = #"{"k":1}"#
 
-        ws.copyTabContent(at: countBefore)
+        ws.duplicateTab(at: countBefore)
 
-        #expect(NSPasteboard.general.string(forType: .string) == #"{"k":1}"#)
+        let duplicated = ws.tabs[countBefore + 1]
+        #expect(ws.tabs.count == countBefore + 2)
+        #expect(duplicated.rawText == #"{"k":1}"#)
+        #expect(duplicated.fileURL == nil)
+        #expect(duplicated.isModified)
+        #expect(duplicated.untitledNumber > 0)
+        #expect(ws.activeTabIndex == countBefore + 1)
+    }
+
+    /// 复制文件标签页时，新页是未命名副本而非绑定同一文件。
+    @Test func duplicateFileTabCreatesUntitledCopy() throws {
+        let ws = WorkspaceViewModel()
+        let countBefore = ws.tabs.count
+        ws.newTab()
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("t_dup.json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try #"{"f":1}"#.write(to: url, atomically: true, encoding: .utf8)
+        try ws.tabs[countBefore].load(from: url)
+
+        ws.duplicateTab(at: countBefore)
+
+        let duplicated = ws.tabs[countBefore + 1]
+        #expect(duplicated.rawText == #"{"f":1}"#)
+        #expect(duplicated.fileURL == nil)
+        #expect(duplicated.documentTitle.hasPrefix("Untitled"))
     }
 
     // MARK: - 关闭二次确认

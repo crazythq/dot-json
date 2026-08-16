@@ -2,4 +2,4 @@
 "tab.context.closeOthers" = "关闭其他页";
 "tab.context.closeAll" = "关闭所有页";
 "tab.context.rename" = "重命名";
-"tab.context.copy" = "复制";
+"tab.context.duplicate" = "复制";

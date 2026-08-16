@@ -146,12 +146,18 @@ final class WorkspaceViewModel {
         closeTabs(at: Array(tabs.indices))
     }
 
-    /// 复制指定标签页的全部内容到剪贴板。
-    func copyTabContent(at index: Int) {
+    /// 复制指定标签页为新标签页：内容与原页相同，作为未命名标签页插入并激活。
+    func duplicateTab(at index: Int) {
         guard tabs.indices.contains(index) else { return }
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(tabs[index].rawText, forType: .string)
+        let source = tabs[index]
+        let vm = EditorViewModel()
+        vm.untitledNumber = nextUntitledNumber
+        nextUntitledNumber += 1
+        vm.indent = source.indent
+        vm.rawText = source.rawText
+        tabs.append(vm)
+        activeTabIndex = tabs.count - 1
+        persistSession()
     }
 
     /// 批量关闭标签页；任一目标含未保存的有效 JSON 内容时先统一确认。

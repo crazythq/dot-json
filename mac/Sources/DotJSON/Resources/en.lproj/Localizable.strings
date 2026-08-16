@@ -2,4 +2,4 @@
 "tab.context.closeOthers" = "Close Other Tabs";
 "tab.context.closeAll" = "Close All Tabs";
 "tab.context.rename" = "Rename";
-"tab.context.copy" = "Copy";
+"tab.context.duplicate" = "Duplicate";

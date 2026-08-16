@@ -136,9 +136,9 @@ private struct TabBarItemView: View {
                 Text("tab.context.rename", bundle: .module)
             }
             Button {
-                workspace.copyTabContent(at: index)
+                workspace.duplicateTab(at: index)
             } label: {
-                Text("tab.context.copy", bundle: .module)
+                Text("tab.context.duplicate", bundle: .module)
             }
         }
     }
