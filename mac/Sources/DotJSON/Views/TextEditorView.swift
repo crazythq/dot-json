@@ -234,7 +234,7 @@ struct TextEditorView: NSViewRepresentable {
     @Environment(EditorViewModel.self) private var viewModel
 
     func makeNSView(context: Context) -> NSView {
-        let containerView = NSView()
+        let containerView = EditorContainerView()
         containerView.translatesAutoresizingMaskIntoConstraints = false
 
         let scrollView = NSScrollView()
@@ -288,6 +288,8 @@ struct TextEditorView: NSViewRepresentable {
         context.coordinator.scrollView = scrollView
         context.coordinator.lineNumberRulerView = rulerView
         context.coordinator.observeScrollViewBounds(scrollView, textView: textView)
+        // 窗口挂载后把初始焦点交给左侧文本编辑框。
+        containerView.focusTarget = textView
         return containerView
     }
 
@@ -417,5 +419,19 @@ struct TextEditorView: NSViewRepresentable {
         func pasteAndFormat(_ text: String) {
             viewModel.pasteAndFormat(text)
         }
+    }
+}
+
+/// 编辑器容器：窗口挂载后自动把焦点交给文本编辑框。
+///
+/// 首次启动或空状态新建标签页时，用户无需手动点击即可直接输入 JSON。
+private final class EditorContainerView: NSView {
+    /// 需要获得焦点的子视图（左侧 JSON 文本编辑框）。
+    weak var focusTarget: NSView?
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard let window, let focusTarget else { return }
+        window.makeFirstResponder(focusTarget)
     }
 }

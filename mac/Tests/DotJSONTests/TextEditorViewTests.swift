@@ -5,6 +5,19 @@ import Testing
 
 @MainActor
 struct TextEditorViewTests {
+    /// 回归测试：编辑器容器在窗口挂载后把焦点交给文本编辑框，保证启动即输入。
+    @Test func editorContainerFocusesTextViewOnWindowAttach() throws {
+        let sourceURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/DotJSON/Views/TextEditorView.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+
+        #expect(source.contains("viewDidMoveToWindow"))
+        #expect(source.contains("window.makeFirstResponder(focusTarget)"))
+    }
+
     @Test func standardPasteRoutesClipboardTextThroughHandler() {
         let pasteboard = NSPasteboard(name: .init("DotJSONTests.Paste"))
         pasteboard.clearContents()
