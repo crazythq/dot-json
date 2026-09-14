@@ -44,7 +44,7 @@ Syntax highlighting, themes toggle, Quick Look, jq/JSONPath.
 | **macOS** | SwiftUI + AppKit app, Foundation CLI, shared Swift core, macOS 14+, zero deps |
 | **uTools (planned)** | HTML/CSS/JS, uTools Plugin API |
 | **Raycast (planned)** | TypeScript + React, Raycast Extensions API |
-| **Packaging** | Xcode Archive → DMG → Notarization → GitHub Release, Homebrew Cask (V1) |
+| **Packaging** | Tag `v*` → GitHub Actions ad-hoc ZIP ([发布说明](docs/RELEASE.md)); Homebrew Cask (V1) |
 
 ## Development
 

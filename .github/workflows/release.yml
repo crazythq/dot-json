@@ -1,0 +1,65 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release-macos:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Test
+        run: |
+          cd mac
+          swift test
+
+      - name: Build release app bundle
+        run: |
+          cd mac
+          ./build-app.sh -c release
+
+      - name: Package zip
+        id: package
+        run: |
+          SEMVER="${GITHUB_REF_NAME#v}"
+          BUILD_DIR="$(cd mac && swift build -c release --show-bin-path)"
+          ZIP_NAME="DotJSON-${SEMVER}-macos-adhoc.zip"
+          ditto -c -k --sequesterResource --keepParent \
+            "$BUILD_DIR/DotJSON.app" "$ZIP_NAME"
+          echo "zip_name=$ZIP_NAME" >> "$GITHUB_OUTPUT"
+          echo "semver=$SEMVER" >> "$GITHUB_OUTPUT"
+
+      - name: Write release notes
+        env:
+          SEMVER: ${{ steps.package.outputs.semver }}
+        run: |
+          {
+            echo "# DotJSON ${SEMVER}"
+            echo
+            echo "本 release 为 **ad-hoc 签名**，未经 Apple 公证。若 Gatekeeper 拦截首次打开，请在 Finder 中对该 app **右键 → 打开**。"
+            echo
+            echo "官方 uTools \`.upxs\` 插件包无法在 CI 中构建；如有需要，请维护者在 Release 中**手动上传**附件。"
+            echo
+            echo "---"
+            echo
+            echo "# DotJSON ${SEMVER}"
+            echo
+            echo "This build is **ad-hoc signed** and **not notarized**. If Gatekeeper blocks the app on first launch, **right-click** the app in Finder and choose **Open**."
+            echo
+            echo "Official uTools \`.upxs\` packages **cannot be built in CI**; attach them manually to the Release if needed."
+          } > release-notes.md
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: DotJSON ${{ steps.package.outputs.semver }}
+          body_path: release-notes.md
+          files: ${{ steps.package.outputs.zip_name }}

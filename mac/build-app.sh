@@ -4,9 +4,28 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
+SWIFT_BUILD_ARGS=()
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -c)
+            if [[ $# -lt 2 ]]; then
+                echo "usage: $0 [-c debug|release]" >&2
+                exit 2
+            fi
+            SWIFT_BUILD_ARGS=(-c "$2")
+            shift 2
+            ;;
+        *)
+            echo "unknown argument: $1" >&2
+            echo "usage: $0 [-c debug|release]" >&2
+            exit 2
+            ;;
+    esac
+done
+
 # 由 SwiftPM 返回真实输出目录，避免把 CPU 架构和构建目录硬编码在脚本中。
-swift build
-BUILD_DIR="$(swift build --show-bin-path)"
+swift build "${SWIFT_BUILD_ARGS[@]}"
+BUILD_DIR="$(swift build "${SWIFT_BUILD_ARGS[@]}" --show-bin-path)"
 APP_DIR="$BUILD_DIR/DotJSON.app"
 BINARY="$BUILD_DIR/DotJSON"
 BUNDLE="$BUILD_DIR/DotJSON_DotJSON.bundle"

@@ -55,8 +55,11 @@ cat model-output.txt | "$BIN_DIR/dotjson" repair
 
 ```bash
 cd mac
-./build-app.sh
+./build-app.sh          # debug（默认）
+./build-app.sh -c release   # 与 CI Release 相同配置
 open "$(swift build --show-bin-path)/DotJSON.app"
 ```
 
 脚本会生成并 ad-hoc 签名 `DotJSON.app`。本地验证时，可在应用中打开 `.json` 文件，或把文件拖入窗口；构建产物不会进入 Git。
+
+正式发布流程见仓库根目录 [docs/RELEASE.md](../docs/RELEASE.md)。
