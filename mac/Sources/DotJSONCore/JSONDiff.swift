@@ -266,7 +266,7 @@ public enum JSONDiff {
     // MARK: - Line LCS
 
     /// 对两段已格式化的文本做行级 LCS Diff。
-    public static func lineDiff(leftPretty: String, rightPretty: String) -> [LineRow] {
+    public static func makeLineDiff(leftPretty: String, rightPretty: String) -> [LineRow] {
         let leftLines = leftPretty.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         let rightLines = rightPretty.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         let leftCount = leftLines.count
