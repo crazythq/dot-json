@@ -23,6 +23,11 @@ sharing the same design contract, not the same codebase.
 
 ## Features
 
+The first public release is **v1.0.0**. It ships the MVP scope below plus multi-tab
+editing, session restore, JSON Path copy, Python ↔ JSON conversion, tab duplicate/rename,
+cursor-aware paste, tree **⌘C** value copy, and the unified `dotjson` CLI. The roadmap
+table keeps original planning labels (e.g. MVP as v0.1.0).
+
 | Phase | Target | Key Features |
 |-------|--------|-------------|
 | **MVP** | v0.1.0 | Dual-pane layout, tree view, format/minify, indent control, paste/clear/copy, save/export, Finder integration, validation, dark UI, tree context menu (copy key/value/path), dual independent search (⌘F left=find bar, ⌘F right=tree search), search debounce, expand-on-match |
