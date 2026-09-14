@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DotJSON</title>
+  <link rel="stylesheet" href="index.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="toolbar" role="toolbar">
+      <div class="toolbar-group">
+        <button type="button" id="btn-format" title="格式化 JSON">格式化</button>
+        <button type="button" id="btn-minify" title="压缩 JSON">压缩</button>
+        <label class="indent-label" title="缩进">
+          缩进
+          <select id="indent-select" aria-label="缩进">
+            <option value="twoSpaces">2 spaces</option>
+            <option value="fourSpaces" selected>4 spaces</option>
+            <option value="tab">Tab</option>
+          </select>
+        </label>
+        <button type="button" id="btn-repair" title="尝试修复 Python/AI 风格 JSON">修复</button>
+      </div>
+      <div class="toolbar-group">
+        <button type="button" id="btn-clear" title="清空">清空</button>
+        <button type="button" id="btn-paste" title="从剪贴板粘贴并尝试格式化">粘贴</button>
+        <button type="button" id="btn-copy" title="复制全文">复制</button>
+      </div>
+      <div class="toolbar-group">
+        <button type="button" id="btn-open" title="打开文件">打开</button>
+        <button type="button" id="btn-export" title="导出到文件">导出</button>
+      </div>
+      <div class="status" id="status" aria-live="polite">就绪</div>
+    </header>
+
+    <main class="panes">
+      <section class="pane pane-editor" aria-label="文本编辑">
+        <div class="pane-header">
+          <span>文本</span>
+          <span id="file-label" class="file-label"></span>
+        </div>
+        <textarea
+          id="editor"
+          spellcheck="false"
+          autocomplete="off"
+          autocapitalize="off"
+          placeholder='粘贴或输入 JSON，例如 {"hello": "world"}'
+        ></textarea>
+      </section>
+
+      <div class="splitter" id="splitter" title="拖拽调整宽度"></div>
+
+      <section class="pane pane-tree" aria-label="树浏览">
+        <div class="pane-header tree-header">
+          <span>树</span>
+          <div class="tree-search" id="tree-search-bar">
+            <input
+              id="tree-search"
+              type="search"
+              placeholder="搜索 key / value / path"
+              autocomplete="off"
+            />
+            <button type="button" id="search-prev" title="上一个">↑</button>
+            <button type="button" id="search-next" title="下一个">↓</button>
+            <span id="search-count" class="search-count"></span>
+          </div>
+        </div>
+        <div id="tree" class="tree" tabindex="0"></div>
+      </section>
+    </main>
+  </div>
+
+  <ul id="context-menu" class="context-menu" hidden>
+    <li data-action="copy-key">Copy Key</li>
+    <li data-action="copy-value">Copy Value</li>
+    <li data-action="copy-path">Copy JSON Path</li>
+  </ul>
+
+  <script src="lib/json-core.js"></script>
+  <script src="index.js"></script>
+</body>
+</html>
