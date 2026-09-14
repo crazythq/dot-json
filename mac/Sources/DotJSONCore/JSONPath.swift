@@ -1,7 +1,7 @@
 import Foundation
 
 /// JSON 路径分量：对象键或数组下标（点分路径中的数字段表示下标）。
-public enum JSONPathComponent: Sendable, Equatable {
+public enum JSONPathComponent: Sendable, Equatable, Hashable {
     case key(String)
     case index(Int)
 }
