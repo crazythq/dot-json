@@ -20,7 +20,15 @@ DotJSON 的原生 macOS 14+ 客户端，使用 SwiftUI、AppKit 和 Swift Packag
 - 搜索 200ms 防抖，Enter 切换下一个命中
 - 搜索高亮 + 自动展开命中祖先链，不改变用户已有展开/收起状态
 
-多标签、持久历史属于 V1；JSONL 导航和 JSON Diff 属于 V2，不在当前 MVP 范围。
+多标签、持久历史属于 V1；JSONL 导航属于 V2 规划中。JSON Diff（路径级对比与合并）已在 V2 提供：菜单「文件对比」与标签页右键「与此对比」。
+
+### JSON Diff 测试（需在 macOS 上运行）
+
+```bash
+cd mac
+swift test --filter JSONDiffTests
+swift test --filter DotJSONCoreTests
+```
 
 ## 开发与测试
 

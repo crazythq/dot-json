@@ -3,6 +3,7 @@
 "tab.context.closeAll" = "Close All Tabs";
 "tab.context.rename" = "Rename";
 "tab.context.duplicate" = "Duplicate";
+"tab.context.compare" = "Compare With This Tab";
 "toolbar.convert" = "Convert";
 "toolbar.convert.toPython" = "To Python Format";
 "toolbar.convert.toJSON" = "To Standard JSON";

@@ -54,6 +54,19 @@ struct ContentView: View {
             workspace.openDocument(from: url)
             return true
         }
+        .sheet(isPresented: Binding(
+            get: { workspace.isDiffPresented },
+            set: { presented in
+                if !presented { workspace.dismissDiff() }
+            }
+        )) {
+            if let diffModel = workspace.diffViewModel {
+                DiffView(model: diffModel) {
+                    workspace.dismissDiff()
+                }
+                .environment(workspace)
+            }
+        }
     }
 
     /// 右侧面板：树搜索栏 + 树视图。

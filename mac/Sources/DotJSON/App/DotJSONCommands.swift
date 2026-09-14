@@ -28,6 +28,10 @@ struct DotJSONCommands: Commands {
         }
 
         CommandGroup(after: .saveItem) {
+            Button("文件对比") {
+                workspace?.presentDiffFromMenu()
+            }
+
             Divider()
 
             if let recent = workspace?.recentFiles, !recent.isEmpty {

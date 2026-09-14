@@ -23,6 +23,8 @@ final class WorkspaceViewModel {
     private(set) var tabs: [EditorViewModel] = []
     var activeTabIndex: Int = -1
     var recentFiles: [URL] = []
+    var diffViewModel: DiffViewModel?
+    var isDiffPresented = false
     private var isRestoringSession = true
     /// 下一个未命名标签页使用的序号（本次运行内单调递增）。
     private var nextUntitledNumber = 1
@@ -207,6 +209,64 @@ final class WorkspaceViewModel {
             guard alert.runModal() == .alertFirstButtonReturn else { return }
             completion()
         }
+    }
+
+    // MARK: - JSON Diff
+
+    /// 菜单入口：以当前标签页为左侧，右侧待选。
+    func presentDiffFromMenu() {
+        let leftBinding = activeDocument.map { tab in
+            DiffSideBinding(
+                source: .tab(tab.id),
+                label: tab.documentTitle,
+                inlineText: tab.rawText,
+                applyTarget: .tab(tab.id)
+            )
+        } ?? DiffSideBinding(
+            source: .inline,
+            label: "左侧",
+            inlineText: "{}",
+            applyTarget: .inlineOnly
+        )
+        let rightBinding = DiffSideBinding(
+            source: .inline,
+            label: "右侧",
+            inlineText: "{}",
+            applyTarget: .inlineOnly
+        )
+        let indent = activeDocument?.indent ?? .fourSpaces
+        diffViewModel = DiffViewModel(left: leftBinding, right: rightBinding, indent: indent)
+        isDiffPresented = true
+    }
+
+    /// 标签页右键：聚焦页 = 左，被右键页 = 右。
+    func presentDiff(focusedTabIndex: Int, otherTabIndex: Int) {
+        guard tabs.indices.contains(focusedTabIndex),
+              tabs.indices.contains(otherTabIndex),
+              focusedTabIndex != otherTabIndex else { return }
+        let leftTab = tabs[focusedTabIndex]
+        let rightTab = tabs[otherTabIndex]
+        diffViewModel = DiffViewModel(
+            left: DiffSideBinding(
+                source: .tab(leftTab.id),
+                label: leftTab.documentTitle,
+                inlineText: leftTab.rawText,
+                applyTarget: .tab(leftTab.id)
+            ),
+            right: DiffSideBinding(
+                source: .tab(rightTab.id),
+                label: rightTab.documentTitle,
+                inlineText: rightTab.rawText,
+                applyTarget: .tab(rightTab.id)
+            ),
+            indent: leftTab.indent
+        )
+        isDiffPresented = true
+    }
+
+    func dismissDiff() {
+        isDiffPresented = false
+        diffViewModel = nil
     }
 
     // MARK: - Document Operations

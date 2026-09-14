@@ -269,6 +269,11 @@ final class EditorViewModel: Identifiable {
         errorLineNumber = 0
     }
 
+    /// 由 Diff 等外部流程写入内容并标记为未保存。
+    func applyExternalContent(_ text: String) {
+        rawText = text
+    }
+
     // MARK: - Private
     private func refreshSearchResults(resetActiveIndex: Bool) {
         searchResults = []

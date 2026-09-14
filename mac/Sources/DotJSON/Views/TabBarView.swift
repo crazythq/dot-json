@@ -140,6 +140,14 @@ private struct TabBarItemView: View {
             } label: {
                 Text("tab.context.duplicate", bundle: .module)
             }
+            Divider()
+            Button {
+                let focused = workspace.activeTabIndex
+                workspace.presentDiff(focusedTabIndex: focused, otherTabIndex: index)
+            } label: {
+                Text("tab.context.compare", bundle: .module)
+            }
+            .disabled(workspace.activeTabIndex < 0 || index == workspace.activeTabIndex)
         }
     }
 
