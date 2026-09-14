@@ -12,14 +12,15 @@ dot-json/
 ├── mac/              # macOS app + dotjson CLI + shared Swift core
 │   ├── DotJSON/      # App source (Model / Views / App / Resources)
 │   └── DotJSONTests/ # Unit tests
-├── utools/           # uTools plugin (planned)
+├── utools/           # uTools plugin (HTML/CSS/JS)
 ├── raycast/          # Raycast extension (planned)
 └── docs/             # Product specs
 ```
 
 The macOS app and `dotjson` CLI share `DotJSONCore`, so parsing and formatting
-behave identically. `utools` and `raycast` remain self-contained JS/TS ports
-sharing the same design contract, not the same codebase.
+behave identically. `utools` is a self-contained JS port under `utools/` (see
+its README for install); `raycast` remains planned. Both share the same design
+contract, not the same codebase.
 
 ## Features
 
@@ -47,7 +48,7 @@ Syntax highlighting, themes toggle, Quick Look, jq/JSONPath.
 | Layer | Technology |
 |-------|-----------|
 | **macOS** | SwiftUI + AppKit app, Foundation CLI, shared Swift core, macOS 14+, zero deps |
-| **uTools (planned)** | HTML/CSS/JS, uTools Plugin API |
+| **uTools** | HTML/CSS/JS, uTools Plugin API (`utools/`) |
 | **Raycast (planned)** | TypeScript + React, Raycast Extensions API |
 | **Packaging** | Xcode Archive → DMG → Notarization → GitHub Release, Homebrew Cask (V1) |
 

@@ -1,0 +1,42 @@
+{
+  "main": "index.html",
+  "logo": "logo.png",
+  "preload": "preload.js",
+  "pluginSetting": {
+    "single": true,
+    "height": 680
+  },
+  "features": [
+    {
+      "code": "dotjson",
+      "explain": "JSON 查看 / 格式化 / 树浏览",
+      "cmds": ["json", "dotjson", "JSON格式化", "格式化JSON"]
+    },
+    {
+      "code": "dotjson-text",
+      "explain": "用 DotJSON 打开选中文本",
+      "cmds": [
+        {
+          "type": "over",
+          "label": "用 DotJSON 打开",
+          "minLength": 2,
+          "maxLength": 100000
+        }
+      ]
+    },
+    {
+      "code": "dotjson-file",
+      "explain": "用 DotJSON 打开 JSON 文件",
+      "cmds": [
+        {
+          "type": "files",
+          "label": "用 DotJSON 打开",
+          "fileType": "file",
+          "extensions": ["json", "JSON"],
+          "minLength": 1,
+          "maxLength": 1
+        }
+      ]
+    }
+  ]
+}
