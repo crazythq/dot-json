@@ -3,27 +3,6 @@ import Foundation
 import Observation
 import DotJSONCore
 
-/// 一侧 JSON 的来源与合并后写回目标。
-struct DiffSideBinding: Equatable {
-    enum Source: Equatable {
-        case tab(UUID)
-        case file(URL)
-        case clipboard
-        case inline
-    }
-
-    var source: Source
-    var label: String
-    var inlineText: String
-    var applyTarget: ApplyTarget
-
-    enum ApplyTarget: Equatable {
-        case tab(UUID)
-        case clipboard
-        case inlineOnly
-    }
-}
-
 enum DiffSidePosition: Sendable {
     case left
     case right
@@ -51,6 +30,20 @@ final class DiffViewModel {
         self.right = right
         self.indent = indent
         refresh()
+    }
+
+    var hasDirtyFileTargets: Bool {
+        left.isFileDirty || right.isFileDirty
+    }
+
+    /// 保存 Diff 中所有脏的文件侧（Cmd+S 入口之一）。
+    func saveDirtyFileTargets(workspace: WorkspaceViewModel) throws {
+        if left.isFileDirty {
+            try saveFileSide(.left, workspace: workspace)
+        }
+        if right.isFileDirty {
+            try saveFileSide(.right, workspace: workspace)
+        }
     }
 
     func reloadFromSources(workspace: WorkspaceViewModel) {
@@ -145,23 +138,12 @@ final class DiffViewModel {
         panel.begin { [weak self] response in
             guard response == .OK, let url = panel.url, let self else { return }
             let text = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+            let binding = DiffSideBinding.fromFile(url: url, text: text)
             switch position {
-            case .left:
-                self.left = DiffSideBinding(
-                    source: .file(url),
-                    label: url.lastPathComponent,
-                    inlineText: text,
-                    applyTarget: .inlineOnly
-                )
-            case .right:
-                self.right = DiffSideBinding(
-                    source: .file(url),
-                    label: url.lastPathComponent,
-                    inlineText: text,
-                    applyTarget: .inlineOnly
-                )
+            case .left: self.left = binding
+            case .right: self.right = binding
             }
-            self.reloadFromSources(workspace: workspace)
+            self.refresh()
         }
     }
 
@@ -201,6 +183,30 @@ final class DiffViewModel {
     }
 
     // MARK: - Private
+
+    private func saveFileSide(_ position: DiffSidePosition, workspace: WorkspaceViewModel) throws {
+        switch position {
+        case .left:
+            var binding = left
+            guard try binding.persistFileToDiskIfDirty() else { return }
+            left = binding
+            if let url = left.fileApplyURL {
+                syncOpenTab(for: url, workspace: workspace)
+            }
+        case .right:
+            var binding = right
+            guard try binding.persistFileToDiskIfDirty() else { return }
+            right = binding
+            if let url = right.fileApplyURL {
+                syncOpenTab(for: url, workspace: workspace)
+            }
+        }
+    }
+
+    private func syncOpenTab(for url: URL, workspace: WorkspaceViewModel) {
+        guard let tab = workspace.tabs.first(where: { $0.fileURL == url }) else { return }
+        tab.acknowledgePersistedToDisk()
+    }
 
     private func captureUndoIfNeeded() {
         guard !canUndo, let leftRoot, let rightRoot else { return }
@@ -253,6 +259,8 @@ final class DiffViewModel {
         switch target {
         case .tab(let id):
             workspace.tabs.first(where: { $0.id == id })?.applyExternalContent(text)
+        case .file(let url):
+            workspace.tabs.first(where: { $0.fileURL == url })?.applyExternalContent(text)
         case .clipboard:
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(text, forType: .string)
@@ -265,8 +273,8 @@ final class DiffViewModel {
         switch side.source {
         case .tab(let id):
             return workspace.tabs.first(where: { $0.id == id })?.rawText ?? side.inlineText
-        case .file(let url):
-            return (try? String(contentsOf: url, encoding: .utf8)) ?? side.inlineText
+        case .file:
+            return side.inlineText
         case .clipboard:
             return NSPasteboard.general.string(forType: .string) ?? side.inlineText
         case .inline:

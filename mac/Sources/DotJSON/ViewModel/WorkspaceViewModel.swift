@@ -300,14 +300,25 @@ final class WorkspaceViewModel {
     }
 
     func saveActiveDocument() {
-        guard let doc = activeDocument else { return }
-        if let url = doc.fileURL {
+        if let diff = diffViewModel, diff.hasDirtyFileTargets {
             do {
-                try doc.save(to: url)
-                persistSession()
+                try diff.saveDirtyFileTargets(workspace: self)
             } catch {
-                doc.reportFileError(error)
+                if let doc = activeDocument {
+                    doc.reportFileError(error)
+                } else {
+                    diff.errorMessage = error.localizedDescription
+                }
+                return
             }
+        }
+
+        guard let doc = activeDocument, doc.isModified, let url = doc.fileURL else { return }
+        do {
+            try doc.save(to: url)
+            persistSession()
+        } catch {
+            doc.reportFileError(error)
         }
     }
 

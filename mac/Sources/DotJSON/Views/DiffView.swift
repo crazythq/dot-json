@@ -26,7 +26,17 @@ struct DiffView: View {
             Text("JSON 对比")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Color(hex: "#d4d4d4"))
+            if model.hasDirtyFileTargets {
+                Text("未保存的文件修改")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color(hex: "#dcdcaa"))
+            }
             Spacer()
+            Button("保存") {
+                workspace.saveActiveDocument()
+            }
+            .disabled(!model.hasDirtyFileTargets)
+            .keyboardShortcut("s", modifiers: .command)
             Button("撤销应用") {
                 model.undo(workspace: workspace)
             }
@@ -80,7 +90,7 @@ struct DiffView: View {
     private func sidePane(title: String, position: DiffSidePosition) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text(title)
+                Text(sideTitle(title, position: position))
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Color(hex: "#858585"))
                 Spacer()
@@ -242,6 +252,11 @@ struct DiffView: View {
     private func summary(_ node: JSONNode?) -> String {
         guard let node else { return "—" }
         return node.summary
+    }
+
+    private func sideTitle(_ title: String, position: DiffSidePosition) -> String {
+        let dirty = position == .left ? model.left.isFileDirty : model.right.isFileDirty
+        return dirty ? "• \(title)" : title
     }
 
 }

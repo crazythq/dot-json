@@ -274,6 +274,11 @@ final class EditorViewModel: Identifiable {
         rawText = text
     }
 
+    /// Diff 或外部流程已把 `rawText` 写入磁盘后，对齐保存基线。
+    func acknowledgePersistedToDisk() {
+        savedText = rawText
+    }
+
     // MARK: - Private
     private func refreshSearchResults(resetActiveIndex: Bool) {
         searchResults = []
