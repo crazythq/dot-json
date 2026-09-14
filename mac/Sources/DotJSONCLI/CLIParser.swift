@@ -3,10 +3,10 @@ import Foundation
 
 /// 零依赖命令行参数解析器。
 enum CLIParser {
-    static let version = "0.1.0"
+    static let version = "1.0.0"
 
     static let help = """
-    DotJSON 0.1.0
+    DotJSON 1.0.0
 
     Usage:
       dotjson format [FILE|-] [--indent 2|4|tab] [--write | --output PATH]
