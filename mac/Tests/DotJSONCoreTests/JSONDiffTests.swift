@@ -112,7 +112,7 @@ struct JSONDiffTests {
     @Test func lineLCSDetectsSameAndChangedLines() throws {
         let left = try JSONFormatter.format(#"{"a":1,"b":2}"#, indent: .twoSpaces)
         let right = try JSONFormatter.format(#"{"a":1,"b":3}"#, indent: .twoSpaces)
-        let rows = JSONDiff.lineDiff(leftPretty: left, rightPretty: right)
+        let rows = JSONDiff.makeLineDiff(leftPretty: left, rightPretty: right)
         #expect(rows.contains { $0.kind == .same })
         #expect(rows.contains { $0.kind == .changed || $0.kind == .removed })
     }

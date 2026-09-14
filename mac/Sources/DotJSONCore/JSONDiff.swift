@@ -124,7 +124,7 @@ public enum JSONDiff {
         if combinedSize > softInputByteLimit {
             lineDiff = .skipped(message: "Combined input exceeds 2 MB; line diff omitted.")
         } else {
-            lineDiff = .available(lineDiff(leftPretty: leftPretty, rightPretty: rightPretty))
+            lineDiff = .available(makeLineDiff(leftPretty: leftPretty, rightPretty: rightPretty))
         }
         return Comparison(
             rows: rows,
