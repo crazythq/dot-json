@@ -85,7 +85,14 @@ struct DiffView: View {
                     .foregroundStyle(Color(hex: "#858585"))
                 Spacer()
                 Menu("来源") {
-                    Button("打开标签页…") { pickTab(position: position) }
+                    if !workspace.tabs.isEmpty {
+                        ForEach(Array(workspace.tabs.enumerated()), id: \.element.id) { _, tab in
+                            Button(tab.documentTitle) {
+                                model.useTab(tab, for: position)
+                            }
+                        }
+                        Divider()
+                    }
                     Button("打开文件…") { model.pickFile(for: position, workspace: workspace) }
                     Button("剪贴板") { model.useClipboard(for: position, workspace: workspace) }
                 }
@@ -237,10 +244,4 @@ struct DiffView: View {
         return node.summary
     }
 
-    private func pickTab(position: DiffSidePosition) {
-        guard !workspace.tabs.isEmpty else { return }
-        let index = workspace.activeTabIndex >= 0 ? workspace.activeTabIndex : 0
-        let tab = workspace.tabs[index]
-        model.useTab(tab, for: position)
-    }
 }
