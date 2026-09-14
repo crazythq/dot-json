@@ -264,9 +264,65 @@ final class WorkspaceViewModel {
         isDiffPresented = true
     }
 
+    /// 请求关闭 Diff；存在未保存的文件侧改动时弹出确认。
+    func requestDismissDiff() {
+        guard isDiffPresented else { return }
+        guard let diff = diffViewModel, diff.hasDirtyFileTargets else {
+            dismissDiff()
+            return
+        }
+        presentDiffDismissConfirmation()
+    }
+
     func dismissDiff() {
         isDiffPresented = false
         diffViewModel = nil
+    }
+
+    private func presentDiffDismissConfirmation() {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "有未保存的文件改动"
+        alert.informativeText = "关闭对比前请选择是否将已应用到文件侧的修改写回磁盘。"
+        alert.addButton(withTitle: "保存并关闭")
+        alert.addButton(withTitle: "丢弃并关闭")
+        alert.addButton(withTitle: "取消")
+
+        let finishSaveAndClose = {
+            do {
+                try self.diffViewModel?.saveDirtyFileTargets(workspace: self)
+                self.dismissDiff()
+            } catch {
+                self.diffViewModel?.reportError(error)
+            }
+        }
+
+        let finishDiscardAndClose = {
+            self.diffViewModel?.revertDirtyFileTargetsToSavedSnapshot(workspace: self)
+            self.dismissDiff()
+        }
+
+        if let window = NSApp.keyWindow {
+            alert.beginSheetModal(for: window) { response in
+                switch response {
+                case .alertFirstButtonReturn:
+                    finishSaveAndClose()
+                case .alertSecondButtonReturn:
+                    finishDiscardAndClose()
+                default:
+                    break
+                }
+            }
+        } else {
+            switch alert.runModal() {
+            case .alertFirstButtonReturn:
+                finishSaveAndClose()
+            case .alertSecondButtonReturn:
+                finishDiscardAndClose()
+            default:
+                break
+            }
+        }
     }
 
     // MARK: - Document Operations
@@ -307,7 +363,7 @@ final class WorkspaceViewModel {
                 if let doc = activeDocument {
                     doc.reportFileError(error)
                 } else {
-                    diff.errorMessage = error.localizedDescription
+                    diff.reportError(error)
                 }
                 return
             }

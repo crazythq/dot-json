@@ -129,7 +129,6 @@ extension JSONNode {
                 }
                 return .array(items)
             }
-            let childIndex = items.indices.contains(index) ? index : items.count
             if !items.indices.contains(index) {
                 while items.count <= index {
                     items.append(.null)

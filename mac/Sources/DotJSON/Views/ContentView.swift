@@ -57,14 +57,13 @@ struct ContentView: View {
         .sheet(isPresented: Binding(
             get: { workspace.isDiffPresented },
             set: { presented in
-                if !presented { workspace.dismissDiff() }
+                if !presented { workspace.requestDismissDiff() }
             }
         )) {
             if let diffModel = workspace.diffViewModel {
-                DiffView(model: diffModel) {
-                    workspace.dismissDiff()
-                }
-                .environment(workspace)
+                DiffView(model: diffModel)
+                    .environment(workspace)
+                    .interactiveDismissDisabled(diffModel.hasDirtyFileTargets)
             }
         }
     }

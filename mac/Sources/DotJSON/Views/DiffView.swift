@@ -5,7 +5,6 @@ import DotJSONCore
 struct DiffView: View {
     @Environment(WorkspaceViewModel.self) private var workspace
     @Bindable var model: DiffViewModel
-    let onClose: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -49,7 +48,7 @@ struct DiffView: View {
                 model.applyAll(direction: .toRight, workspace: workspace)
             }
             .disabled(model.comparison?.rows.isEmpty != false)
-            Button("关闭") { onClose() }
+            Button("关闭") { workspace.requestDismissDiff() }
                 .keyboardShortcut(.cancelAction)
         }
         .buttonStyle(.bordered)

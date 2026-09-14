@@ -36,6 +36,12 @@ final class DiffViewModel {
         left.isFileDirty || right.isFileDirty
     }
 
+    /// 丢弃未保存的文件侧改动：内存与已打开的同路径标签页恢复为 `savedSnapshot`（磁盘内容）。
+    func revertDirtyFileTargetsToSavedSnapshot(workspace: WorkspaceViewModel) {
+        revertSideIfDirty(&left, workspace: workspace)
+        revertSideIfDirty(&right, workspace: workspace)
+    }
+
     /// 保存 Diff 中所有脏的文件侧（Cmd+S 入口之一）。
     func saveDirtyFileTargets(workspace: WorkspaceViewModel) throws {
         if left.isFileDirty {
@@ -44,6 +50,10 @@ final class DiffViewModel {
         if right.isFileDirty {
             try saveFileSide(.right, workspace: workspace)
         }
+    }
+
+    func reportError(_ error: Error) {
+        errorMessage = error.localizedDescription
     }
 
     func reloadFromSources(workspace: WorkspaceViewModel) {
@@ -183,6 +193,15 @@ final class DiffViewModel {
     }
 
     // MARK: - Private
+
+    private func revertSideIfDirty(_ side: inout DiffSideBinding, workspace: WorkspaceViewModel) {
+        guard side.isFileDirty, case .file(let url) = side.applyTarget else { return }
+        side.inlineText = side.savedSnapshot
+        if let tab = workspace.tabs.first(where: { $0.fileURL == url }) {
+            tab.applyExternalContent(side.savedSnapshot)
+            tab.acknowledgePersistedToDisk()
+        }
+    }
 
     private func saveFileSide(_ position: DiffSidePosition, workspace: WorkspaceViewModel) throws {
         switch position {

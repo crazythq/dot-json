@@ -139,6 +139,10 @@ public enum JSONDiff {
     // MARK: - Apply
 
     /// 将单条结构化 Diff 应用到指定侧。
+    ///
+    /// `add` 表示仅右侧存在的路径：`toLeft` 把 `rightValue` 写入左侧；`toRight` 从右侧删除该路径（拒绝新增）。
+    /// `remove` 表示仅左侧存在：`toLeft` 从左侧删除；`toRight` 把 `leftValue` 写入右侧。
+    /// `change`：`toLeft` 用 `rightValue` 覆盖左侧；`toRight` 用 `leftValue` 覆盖右侧。
     public static func apply(
         row: Row,
         direction: ApplyDirection,
