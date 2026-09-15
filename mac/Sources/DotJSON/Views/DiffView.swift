@@ -40,7 +40,7 @@ struct DiffView: View {
                 model.undo(workspace: workspace)
             }
             .disabled(!model.canUndo)
-            Button("Apply all: Right → Left") {
+            Button("Apply all: Left ← Right") {
                 model.applyAll(direction: .toLeft, workspace: workspace)
             }
             .disabled(model.comparison?.rows.isEmpty != false)
@@ -174,8 +174,8 @@ struct DiffView: View {
                 .foregroundStyle(Color(hex: "#858585"))
                 .lineLimit(1)
                 .frame(maxWidth: 120, alignment: .leading)
-            Button("Right → Left") { model.apply(row: row, direction: .toLeft, workspace: workspace) }
-                .help("Right → Left")
+            Button("Left ← Right") { model.apply(row: row, direction: .toLeft, workspace: workspace) }
+                .help("Left ← Right")
             Button("Left → Right") { model.apply(row: row, direction: .toRight, workspace: workspace) }
                 .help("Left → Right")
         }
