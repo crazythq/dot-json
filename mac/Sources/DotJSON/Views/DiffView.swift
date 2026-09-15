@@ -40,11 +40,11 @@ struct DiffView: View {
                 model.undo(workspace: workspace)
             }
             .disabled(!model.canUndo)
-            Button("Apply all changes to Left") {
+            Button("Apply all changes → Left") {
                 model.applyAll(direction: .toLeft, workspace: workspace)
             }
             .disabled(model.comparison?.rows.isEmpty != false)
-            Button("Apply all changes to Right") {
+            Button("Apply all changes → Right") {
                 model.applyAll(direction: .toRight, workspace: workspace)
             }
             .disabled(model.comparison?.rows.isEmpty != false)
