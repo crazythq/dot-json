@@ -153,36 +153,47 @@ struct DiffView: View {
 
     private func structuredRow(_ row: JSONDiff.Row) -> some View {
         HStack(spacing: 8) {
-            Text(row.kind.rawValue)
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+            Text(kindLetter(row.kind))
+                .font(.system(size: 11, weight: .bold, design: .monospaced))
                 .foregroundStyle(kindColor(row.kind))
-                .frame(width: 56, alignment: .leading)
+                .frame(width: 16, alignment: .leading)
             Text(row.path.description.isEmpty ? "(root)" : row.path.description)
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundStyle(Color(hex: "#d4d4d4"))
                 .lineLimit(1)
-            Spacer()
+            Spacer(minLength: 8)
             Text(summary(row.leftValue))
                 .font(.system(size: 10, design: .monospaced))
                 .foregroundStyle(Color(hex: "#858585"))
                 .lineLimit(1)
                 .frame(maxWidth: 120, alignment: .trailing)
-            Text("→")
-                .foregroundStyle(Color(hex: "#555555"))
+            Button("←") { model.apply(row: row, direction: .toLeft, workspace: workspace) }
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Color(hex: "#4fc1ff"))
+                .buttonStyle(.plain)
+                .help("Left ← Right")
+            Button("→") { model.apply(row: row, direction: .toRight, workspace: workspace) }
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Color(hex: "#4fc1ff"))
+                .buttonStyle(.plain)
+                .help("Left → Right")
             Text(summary(row.rightValue))
                 .font(.system(size: 10, design: .monospaced))
                 .foregroundStyle(Color(hex: "#858585"))
                 .lineLimit(1)
                 .frame(maxWidth: 120, alignment: .leading)
-            Button("Left ← Right") { model.apply(row: row, direction: .toLeft, workspace: workspace) }
-                .help("Left ← Right")
-            Button("Left → Right") { model.apply(row: row, direction: .toRight, workspace: workspace) }
-                .help("Left → Right")
         }
-        .buttonStyle(.borderless)
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
         .background(Color(hex: "#1e1e1e"))
+    }
+
+    private func kindLetter(_ kind: JSONDiff.Kind) -> String {
+        switch kind {
+        case .add: return "A"
+        case .remove: return "D"
+        case .change: return "M"
+        }
     }
 
     private var lineDiffSection: some View {
