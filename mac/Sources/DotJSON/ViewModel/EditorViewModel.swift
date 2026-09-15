@@ -15,10 +15,10 @@ final class EditorViewModel: Identifiable {
         var errorDescription: String? {
             switch self {
             case .nonFileURL:
-                return "只能打开本地 JSON 文件。"
+                return "Only local JSON files can be opened."
             case .unsupportedFileExtension(let fileExtension):
-                let displayedExtension = fileExtension.isEmpty ? "无扩展名" : ".\(fileExtension)"
-                return "不支持 \(displayedExtension) 文件，MVP 仅支持 .json。"
+                let displayedExtension = fileExtension.isEmpty ? "no extension" : ".\(fileExtension)"
+                return "Unsupported \(displayedExtension) file. MVP supports .json only."
             }
         }
     }

@@ -35,7 +35,7 @@ final class LineNumberRulerView: NSView, NSViewToolTipOwner {
 
     @available(*, unavailable)
     required init(coder: NSCoder) {
-        fatalError("LineNumberRulerView 不支持从 Interface Builder 创建")
+        fatalError("LineNumberRulerView does not support Interface Builder")
     }
 
     /// 更新需要标记的错误行和悬停文案。
@@ -191,6 +191,6 @@ final class LineNumberRulerView: NSView, NSViewToolTipOwner {
         point: NSPoint,
         userData data: UnsafeMutableRawPointer?
     ) -> String {
-        errorMessage ?? "JSON 格式错误"
+        errorMessage ?? "Invalid JSON"
     }
 }

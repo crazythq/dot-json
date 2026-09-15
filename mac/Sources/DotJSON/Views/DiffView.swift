@@ -22,33 +22,33 @@ struct DiffView: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            Text("JSON 对比")
+            Text("JSON Diff")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Color(hex: "#d4d4d4"))
             if model.hasDirtyFileTargets {
-                Text("未保存的文件修改")
+                Text("Unsaved file changes")
                     .font(.system(size: 11))
                     .foregroundStyle(Color(hex: "#dcdcaa"))
             }
             Spacer()
-            Button("保存") {
+            Button("Save") {
                 workspace.saveActiveDocument()
             }
             .disabled(!model.hasDirtyFileTargets)
             .keyboardShortcut("s", modifiers: .command)
-            Button("撤销应用") {
+            Button("Undo Apply") {
                 model.undo(workspace: workspace)
             }
             .disabled(!model.canUndo)
-            Button("全部 → 左") {
+            Button("Apply All → Left") {
                 model.applyAll(direction: .toLeft, workspace: workspace)
             }
             .disabled(model.comparison?.rows.isEmpty != false)
-            Button("全部 → 右") {
+            Button("Apply All → Right") {
                 model.applyAll(direction: .toRight, workspace: workspace)
             }
             .disabled(model.comparison?.rows.isEmpty != false)
-            Button("关闭") { workspace.requestDismissDiff() }
+            Button("Close") { workspace.requestDismissDiff() }
                 .keyboardShortcut(.cancelAction)
         }
         .buttonStyle(.bordered)
@@ -93,7 +93,7 @@ struct DiffView: View {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Color(hex: "#858585"))
                 Spacer()
-                Menu("来源") {
+                Menu("Source") {
                     if !workspace.tabs.isEmpty {
                         ForEach(Array(workspace.tabs.enumerated()), id: \.element.id) { _, tab in
                             Button(tab.documentTitle) {
@@ -102,8 +102,8 @@ struct DiffView: View {
                         }
                         Divider()
                     }
-                    Button("打开文件…") { model.pickFile(for: position, workspace: workspace) }
-                    Button("剪贴板") { model.useClipboard(for: position, workspace: workspace) }
+                    Button("Open File…") { model.pickFile(for: position, workspace: workspace) }
+                    Button("Clipboard") { model.useClipboard(for: position, workspace: workspace) }
                 }
                 .menuStyle(.borderlessButton)
                 .font(.system(size: 11))
@@ -125,7 +125,7 @@ struct DiffView: View {
 
     private var structuredSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("路径差异")
+            Text("Path Diff")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(Color(hex: "#858585"))
                 .padding(.horizontal, 10)
@@ -143,7 +143,7 @@ struct DiffView: View {
                     }
                 }
             } else {
-                Text("无结构化差异")
+                Text("No structural differences")
                     .font(.system(size: 12))
                     .foregroundStyle(Color(hex: "#858585"))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -175,9 +175,9 @@ struct DiffView: View {
                 .lineLimit(1)
                 .frame(maxWidth: 120, alignment: .leading)
             Button("←") { model.apply(row: row, direction: .toLeft, workspace: workspace) }
-                .help("应用到左侧")
+                .help("Apply to Left")
             Button("→") { model.apply(row: row, direction: .toRight, workspace: workspace) }
-                .help("应用到右侧")
+                .help("Apply to Right")
         }
         .buttonStyle(.borderless)
         .padding(.horizontal, 10)
@@ -187,7 +187,7 @@ struct DiffView: View {
 
     private var lineDiffSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("行级差异")
+            Text("Line Diff")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(Color(hex: "#858585"))
                 .padding(.horizontal, 10)

@@ -91,9 +91,9 @@ final class DiffViewModel {
         } catch let error as JSONDiff.CompareError {
             switch error {
             case .leftInvalid(let parseError):
-                errorMessage = "左侧 JSON 无效：\(parseError.localizedDescription ?? "未知错误")"
+                errorMessage = "Invalid JSON on the left: \(parseError.localizedDescription)"
             case .rightInvalid(let parseError):
-                errorMessage = "右侧 JSON 无效：\(parseError.localizedDescription ?? "未知错误")"
+                errorMessage = "Invalid JSON on the right: \(parseError.localizedDescription)"
             }
         } catch {
             errorMessage = error.localizedDescription
@@ -163,14 +163,14 @@ final class DiffViewModel {
         case .left:
             left = DiffSideBinding(
                 source: .clipboard,
-                label: "剪贴板",
+                label: "Clipboard",
                 inlineText: text,
                 applyTarget: .clipboard
             )
         case .right:
             right = DiffSideBinding(
                 source: .clipboard,
-                label: "剪贴板",
+                label: "Clipboard",
                 inlineText: text,
                 applyTarget: .clipboard
             )

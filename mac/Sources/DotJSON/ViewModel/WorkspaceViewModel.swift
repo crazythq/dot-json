@@ -81,10 +81,10 @@ final class WorkspaceViewModel {
     private func presentCloseConfirmation(for tab: EditorViewModel, at index: Int) {
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "关闭“\(tab.documentTitle)”？"
-        alert.informativeText = "该标签页包含符合 JSON 格式且尚未保存的内容，关闭后将丢失。"
-        alert.addButton(withTitle: "关闭")
-        alert.addButton(withTitle: "取消")
+        alert.messageText = "Close \"\(tab.documentTitle)\"?"
+        alert.informativeText = "This tab has unsaved valid JSON. Closing will discard those changes."
+        alert.addButton(withTitle: "Close")
+        alert.addButton(withTitle: "Cancel")
 
         if let window = NSApp.keyWindow {
             alert.beginSheetModal(for: window) { response in
@@ -194,11 +194,11 @@ final class WorkspaceViewModel {
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = targetCount == 1
-            ? "关闭标签页？"
-            : "关闭 \(targetCount) 个标签页？"
-        alert.informativeText = "其中 \(confirmedCount) 个标签页包含符合 JSON 格式且尚未保存的内容，关闭后将丢失。"
-        alert.addButton(withTitle: "关闭")
-        alert.addButton(withTitle: "取消")
+            ? "Close Tab?"
+            : "Close \(targetCount) Tabs?"
+        alert.informativeText = "\(confirmedCount) tab(s) have unsaved valid JSON. Closing will discard those changes."
+        alert.addButton(withTitle: "Close")
+        alert.addButton(withTitle: "Cancel")
 
         if let window = NSApp.keyWindow {
             alert.beginSheetModal(for: window) { response in
@@ -224,13 +224,13 @@ final class WorkspaceViewModel {
             )
         } ?? DiffSideBinding(
             source: .inline,
-            label: "左侧",
+            label: "Left",
             inlineText: "{}",
             applyTarget: .inlineOnly
         )
         let rightBinding = DiffSideBinding(
             source: .inline,
-            label: "右侧",
+            label: "Right",
             inlineText: "{}",
             applyTarget: .inlineOnly
         )
@@ -282,11 +282,11 @@ final class WorkspaceViewModel {
     private func presentDiffDismissConfirmation() {
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "有未保存的文件改动"
-        alert.informativeText = "关闭对比前请选择是否将已应用到文件侧的修改写回磁盘。"
-        alert.addButton(withTitle: "保存并关闭")
-        alert.addButton(withTitle: "丢弃并关闭")
-        alert.addButton(withTitle: "取消")
+        alert.messageText = "Unsaved file changes"
+        alert.informativeText = "Choose whether to write applied file-side changes to disk before closing."
+        alert.addButton(withTitle: "Save and Close")
+        alert.addButton(withTitle: "Discard and Close")
+        alert.addButton(withTitle: "Cancel")
 
         let finishSaveAndClose = {
             do {

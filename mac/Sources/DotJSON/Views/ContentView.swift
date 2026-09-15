@@ -31,10 +31,10 @@ struct ContentView: View {
                         Image(systemName: "doc.text.magnifyingglass")
                             .font(.system(size: 36))
                             .foregroundColor(Color(hex: "#454545"))
-                        Text("打开 JSON 文件以开始")
+                        Text("Open a JSON file to get started")
                             .font(.system(size: 13))
                             .foregroundColor(Color(hex: "#858585"))
-                        Button("新建文档") {
+                        Button("New Document") {
                             workspace.newTab()
                         }
                         .buttonStyle(.bordered)
@@ -108,7 +108,7 @@ struct ContentView: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(Color(hex: "#d4d4d4"))
-                .help("上一个结果")
+                .help("Previous result")
 
                 Text("\(doc.activeTreeSearchIndex + 1)/\(doc.treeSearchMatchCount)")
                     .font(.system(size: 10, design: .monospaced))
@@ -120,9 +120,9 @@ struct ContentView: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(Color(hex: "#d4d4d4"))
-                .help("下一个结果")
+                .help("Next result")
             } else if !treeSearchText.isEmpty {
-                Text("无结果")
+                Text("No results")
                     .font(.system(size: 10))
                     .foregroundColor(Color(hex: "#b8b8b8"))
             }
@@ -133,7 +133,7 @@ struct ContentView: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(Color(hex: "#d4d4d4"))
-            .help("关闭搜索")
+            .help("Close search")
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
@@ -165,7 +165,7 @@ private struct NativeTreeSearchField: NSViewRepresentable {
     func makeNSView(context: Context) -> NSTextField {
         let field = NSSearchField()
         field.placeholderAttributedString = NSAttributedString(
-            string: "搜索 key / value",
+            string: "Search key / value",
             attributes: [.foregroundColor: NSColor(hex: "#858585")]
         )
         field.isBordered = true

@@ -16,7 +16,7 @@ struct ToolbarView: ToolbarContent {
         ToolbarItemGroup {
             Button(action: { workspace.activeDocument?.format() }) {
                 Label {
-                    Text("格式化")
+                    Text("Format")
                 } icon: {
                     JSONTransformIconShape(kind: .formatted)
                         .stroke(
@@ -30,11 +30,11 @@ struct ToolbarView: ToolbarContent {
                         .accessibilityHidden(true)
                 }
             }
-            .help("格式化 JSON")
+            .help("Format JSON")
 
             Button(action: { workspace.activeDocument?.minify() }) {
                 Label {
-                    Text("压缩")
+                    Text("Minify")
                 } icon: {
                     JSONTransformIconShape(kind: .minified)
                         .stroke(
@@ -48,17 +48,17 @@ struct ToolbarView: ToolbarContent {
                         .accessibilityHidden(true)
                 }
             }
-            .help("压缩 JSON")
+            .help("Minify JSON")
 
             if let doc = workspace.activeDocument {
-                Picker("缩进", selection: Bindable(doc).indent) {
+                Picker("Indent", selection: Bindable(doc).indent) {
                     ForEach(JSONFormatter.Indent.allCases, id: \.self) { o in
                         Text(o.label).tag(o)
                     }
                 }
                 .pickerStyle(.menu)
                 .frame(width: 100)
-                .help("缩进：2 空格 / 4 空格 / Tab")
+                .help("Indent: 2 spaces / 4 spaces / Tab")
             }
         }
 
@@ -91,21 +91,21 @@ struct ToolbarView: ToolbarContent {
         // ── 文件操作 ──
         ToolbarItem {
             ControlGroup {
-                toolbarIconButton("清空", systemImage: "trash") {
+                toolbarIconButton("Clear", systemImage: "trash") {
                     workspace.activeDocument?.clear()
                 }
-                .help("清空内容")
+                .help("Clear content")
 
-                toolbarIconButton("粘贴", systemImage: "doc.on.clipboard") {
+                toolbarIconButton("Paste", systemImage: "doc.on.clipboard") {
                     pasteFromClipboard()
                 }
-                .help("粘贴并格式化")
+                .help("Paste and format")
                 .keyboardShortcut("v", modifiers: [.command, .shift])
 
-                toolbarIconButton("复制", systemImage: "doc.on.doc") {
+                toolbarIconButton("Copy", systemImage: "doc.on.doc") {
                     copyToClipboard()
                 }
-                .help("复制到剪贴板")
+                .help("Copy to clipboard")
             }
             .controlGroupStyle(.navigation)
             .controlSize(.large)
@@ -114,22 +114,22 @@ struct ToolbarView: ToolbarContent {
         // ── 导入/导出 ──
         ToolbarItem {
             ControlGroup {
-                toolbarIconButton("导入", systemImage: "square.and.arrow.down") {
+                toolbarIconButton("Import", systemImage: "square.and.arrow.down") {
                     importDocument()
                 }
-                .help("导入 JSON 文件")
+                .help("Import JSON file")
 
                 Menu {
-                    Button("导出格式化 JSON") {
+                    Button("Export Formatted JSON") {
                         export(format: .formatted)
                     }
-                    Button("导出压缩 JSON") {
+                    Button("Export Minified JSON") {
                         export(format: .minified)
                     }
                 } label: {
-                    toolbarIconLabel("导出", systemImage: "square.and.arrow.up")
+                    toolbarIconLabel("Export", systemImage: "square.and.arrow.up")
                 }
-                .help("导出 JSON")
+                .help("Export JSON")
             }
             .controlGroupStyle(.navigation)
             .controlSize(.large)
@@ -153,7 +153,7 @@ struct ToolbarView: ToolbarContent {
             .labelStyle(ToolbarIconLabelStyle(showsText: toolbarShowsText))
             .contentShape(Rectangle())
             .contextMenu {
-                Toggle("显示文字", isOn: $toolbarShowsText)
+                Toggle("Show Text", isOn: $toolbarShowsText)
             }
     }
 
