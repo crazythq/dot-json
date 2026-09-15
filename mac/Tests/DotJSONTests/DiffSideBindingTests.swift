@@ -29,6 +29,22 @@ struct DiffSideBindingTests {
         #expect(!noop)
     }
 
+    @Test func tabSideTracksDirtyAfterEdit() {
+        let tabID = UUID()
+        var side = DiffSideBinding(
+            source: .tab(tabID),
+            label: "Tab",
+            inlineText: "{}",
+            applyTarget: .tab(tabID)
+        )
+        #expect(!side.isTabDirty)
+        #expect(!side.showsUnsavedIndicator)
+
+        side.inlineText = "{\"x\":1}"
+        #expect(side.isTabDirty)
+        #expect(side.showsUnsavedIndicator)
+    }
+
     @Test func inlineSideNeverReportsFileDirty() {
         var side = DiffSideBinding(
             source: .inline,

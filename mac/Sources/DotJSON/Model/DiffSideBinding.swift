@@ -43,6 +43,17 @@ struct DiffSideBinding: Equatable {
         return inlineText != savedSnapshot
     }
 
+    /// 标签页写回目标是否相对 Diff 打开时的快照有未保存修改。
+    var isTabDirty: Bool {
+        guard case .tab = applyTarget else { return false }
+        return inlineText != savedSnapshot
+    }
+
+    /// Diff 侧标题上的未保存圆点（文件或标签页；剪贴板与纯内联不计）。
+    var showsUnsavedIndicator: Bool {
+        isFileDirty || isTabDirty
+    }
+
     var fileApplyURL: URL? {
         guard case .file(let url) = applyTarget else { return nil }
         return url

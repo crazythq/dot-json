@@ -11,10 +11,9 @@ struct DiffView: View {
             header
             Divider().overlay(Color(hex: "#333333"))
             if let error = model.errorMessage {
-                errorBanner(error)
-            } else {
-                content
+                operationErrorBanner(error)
             }
+            content
         }
         .frame(minWidth: 820, minHeight: 560)
         .background(Color(hex: "#1a1a1a"))
@@ -32,7 +31,11 @@ struct DiffView: View {
             }
             Spacer()
             Button("Save") {
-                workspace.saveActiveDocument()
+                do {
+                    try model.saveDirtyFileTargets(workspace: workspace)
+                } catch {
+                    model.reportError(error)
+                }
             }
             .disabled(!model.hasDirtyFileTargets)
             .keyboardShortcut("s", modifiers: .command)
@@ -57,17 +60,23 @@ struct DiffView: View {
         .background(Color(hex: "#252526"))
     }
 
-    private func errorBanner(_ message: String) -> some View {
-        VStack(spacing: 12) {
+    private func operationErrorBanner(_ message: String) -> some View {
+        HStack(spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundStyle(Color(hex: "#f48771"))
             Text(message)
-                .font(.system(size: 13))
+                .font(.system(size: 12))
                 .foregroundStyle(Color(hex: "#d4d4d4"))
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 24)
+                .lineLimit(2)
+            Spacer()
+            Button("Dismiss") { model.clearOperationError() }
+                .buttonStyle(.plain)
+                .font(.system(size: 11))
+                .foregroundStyle(Color(hex: "#4fc1ff"))
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color(hex: "#3a2d2d"))
     }
 
     private var content: some View {
@@ -111,15 +120,46 @@ struct DiffView: View {
             .padding(.horizontal, 8)
             .padding(.top, 6)
 
-            ScrollView {
-                Text(position == .left ? model.left.inlineText : model.right.inlineText)
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(Color(hex: "#cccccc"))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .textSelection(.enabled)
-                    .padding(8)
+            sideTextEditor(position: position)
+                .background(Color(hex: "#1e1e1e"))
+
+            if let parseError = sideParseError(position) {
+                Text(parseError)
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color(hex: "#f48771"))
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 6)
             }
-            .background(Color(hex: "#1e1e1e"))
+        }
+    }
+
+    private func sideTextEditor(position: DiffSidePosition) -> some View {
+        TextEditor(text: sideTextBinding(position))
+            .font(.system(size: 11, design: .monospaced))
+            .foregroundStyle(Color(hex: "#cccccc"))
+            .scrollContentBackground(.hidden)
+            .padding(4)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func sideTextBinding(_ position: DiffSidePosition) -> Binding<String> {
+        Binding(
+            get: {
+                switch position {
+                case .left: model.left.inlineText
+                case .right: model.right.inlineText
+                }
+            },
+            set: { newValue in
+                model.setInlineText(newValue, on: position, workspace: workspace)
+            }
+        )
+    }
+
+    private func sideParseError(_ position: DiffSidePosition) -> String? {
+        switch position {
+        case .left: model.leftParseError
+        case .right: model.rightParseError
         }
     }
 
@@ -133,7 +173,9 @@ struct DiffView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color(hex: "#252526"))
 
-            if let rows = model.comparison?.rows, !rows.isEmpty {
+            if model.leftParseError != nil || model.rightParseError != nil {
+                structuredParseErrorPlaceholder
+            } else if let rows = model.comparison?.rows, !rows.isEmpty {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(rows, id: \.id) { row in
@@ -142,8 +184,13 @@ struct DiffView: View {
                         }
                     }
                 }
-            } else {
+            } else if model.comparison != nil {
                 Text("No structural differences")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color(hex: "#858585"))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                Text("Enter valid JSON on both sides to compare")
                     .font(.system(size: 12))
                     .foregroundStyle(Color(hex: "#858585"))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -207,7 +254,13 @@ struct DiffView: View {
                 .background(Color(hex: "#252526"))
 
             Group {
-                if let comparison = model.comparison {
+                if model.leftParseError != nil || model.rightParseError != nil {
+                    Text("Line diff unavailable until both sides parse as JSON")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color(hex: "#858585"))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .padding(8)
+                } else if let comparison = model.comparison {
                     switch comparison.lineDiff {
                     case .available(let lines):
                         ScrollView {
@@ -225,6 +278,12 @@ struct DiffView: View {
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .padding(8)
                     }
+                } else {
+                    Text("Line diff unavailable")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color(hex: "#858585"))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .padding(8)
                 }
             }
             .background(Color(hex: "#1e1e1e"))
@@ -265,8 +324,28 @@ struct DiffView: View {
     }
 
     private func sideTitle(_ title: String, position: DiffSidePosition) -> String {
-        let dirty = position == .left ? model.left.isFileDirty : model.right.isFileDirty
-        return dirty ? "• \(title)" : title
+        let side = position == .left ? model.left : model.right
+        return side.showsUnsavedIndicator ? "• \(title)" : title
+    }
+
+    private var structuredParseErrorPlaceholder: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Path diff unavailable")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Color(hex: "#d4d4d4"))
+            if let message = model.leftParseError {
+                Text("Left: \(message)")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color(hex: "#f48771"))
+            }
+            if let message = model.rightParseError {
+                Text("Right: \(message)")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color(hex: "#f48771"))
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(12)
     }
 
 }

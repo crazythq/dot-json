@@ -17,13 +17,19 @@ final class DiffViewModel {
     var indent: JSONFormatter.Indent = .fourSpaces
 
     private(set) var comparison: JSONDiff.Comparison?
+    /// 合并/保存等操作错误（不隐藏编辑器）。
     private(set) var errorMessage: String?
+    private(set) var leftParseError: String?
+    private(set) var rightParseError: String?
     private(set) var canUndo = false
 
     private var leftRoot: JSONNode?
     private var rightRoot: JSONNode?
     private var undoLeftRoot: JSONNode?
     private var undoRightRoot: JSONNode?
+    private var refreshDebounceTask: Task<Void, Never>?
+
+    private static let refreshDebounceNanoseconds: UInt64 = 250_000_000
 
     init(left: DiffSideBinding, right: DiffSideBinding, indent: JSONFormatter.Indent = .fourSpaces) {
         self.left = left
@@ -56,48 +62,82 @@ final class DiffViewModel {
         errorMessage = error.localizedDescription
     }
 
-    func reloadFromSources(workspace: WorkspaceViewModel) {
-        left.inlineText = resolveText(for: left, workspace: workspace)
-        right.inlineText = resolveText(for: right, workspace: workspace)
-        refresh()
+    func clearOperationError() {
+        errorMessage = nil
     }
 
-    func setInlineText(_ text: String, on position: DiffSidePosition) {
+    func reloadFromSources(workspace: WorkspaceViewModel) {
+        cancelPendingRefresh()
+        left.inlineText = resolveText(for: left, workspace: workspace)
+        right.inlineText = resolveText(for: right, workspace: workspace)
+        refresh(syncWorkspaceTargets: workspace)
+    }
+
+    /// 用户编辑 Diff 侧文本；立即更新绑定并防抖重算 Diff。
+    func setInlineText(_ text: String, on position: DiffSidePosition, workspace: WorkspaceViewModel) {
         switch position {
         case .left:
             left.inlineText = text
-            if left.source == .inline { refresh() }
         case .right:
             right.inlineText = text
-            if right.source == .inline { refresh() }
         }
+        scheduleDebouncedRefresh(workspace: workspace)
     }
 
     func refresh() {
-        errorMessage = nil
+        refresh(syncWorkspaceTargets: nil)
+    }
+
+    private func refresh(syncWorkspaceTargets workspace: WorkspaceViewModel?) {
+        if let workspace {
+            syncOpenTargetsFromInlineText(workspace: workspace)
+        }
+
+        leftParseError = nil
+        rightParseError = nil
         comparison = nil
         leftRoot = nil
         rightRoot = nil
 
-        do {
-            let result = try JSONDiff.compare(
-                leftText: left.inlineText,
-                rightText: right.inlineText,
-                indent: indent
-            )
-            comparison = result
-            leftRoot = result.leftRoot
-            rightRoot = result.rightRoot
-        } catch let error as JSONDiff.CompareError {
-            switch error {
-            case .leftInvalid(let parseError):
-                errorMessage = "Invalid JSON on the left: \(parseError.localizedDescription)"
-            case .rightInvalid(let parseError):
-                errorMessage = "Invalid JSON on the right: \(parseError.localizedDescription)"
-            }
-        } catch {
-            errorMessage = error.localizedDescription
+        let parsedLeft = parseSideText(left.inlineText)
+        let parsedRight = parseSideText(right.inlineText)
+
+        if let error = parsedLeft.error {
+            leftParseError = "Invalid JSON: \(error.localizedDescription)"
         }
+        if let error = parsedRight.error {
+            rightParseError = "Invalid JSON: \(error.localizedDescription)"
+        }
+
+        guard let leftNode = parsedLeft.node, let rightNode = parsedRight.node else { return }
+
+        leftRoot = leftNode
+        rightRoot = rightNode
+        comparison = JSONDiff.compare(
+            left: leftNode,
+            right: rightNode,
+            leftText: left.inlineText,
+            rightText: right.inlineText,
+            indent: indent
+        )
+    }
+
+    private func scheduleDebouncedRefresh(workspace: WorkspaceViewModel) {
+        refreshDebounceTask?.cancel()
+        refreshDebounceTask = Task { @MainActor in
+            do {
+                try await Task.sleep(nanoseconds: Self.refreshDebounceNanoseconds)
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else { return }
+            self.refresh(syncWorkspaceTargets: workspace)
+        }
+    }
+
+    private func cancelPendingRefresh() {
+        refreshDebounceTask?.cancel()
+        refreshDebounceTask = nil
     }
 
     func apply(row: JSONDiff.Row, direction: JSONDiff.ApplyDirection, workspace: WorkspaceViewModel) {
@@ -153,6 +193,7 @@ final class DiffViewModel {
             case .left: self.left = binding
             case .right: self.right = binding
             }
+            self.cancelPendingRefresh()
             self.refresh()
         }
     }
@@ -175,6 +216,7 @@ final class DiffViewModel {
                 applyTarget: .clipboard
             )
         }
+        cancelPendingRefresh()
         refresh()
     }
 
@@ -189,10 +231,41 @@ final class DiffViewModel {
         case .left: left = binding
         case .right: right = binding
         }
-        refresh()
+        cancelPendingRefresh()
+        refresh(syncWorkspaceTargets: nil)
     }
 
     // MARK: - Private
+
+    private struct ParsedSide {
+        let node: JSONNode?
+        let error: Error?
+    }
+
+    private func parseSideText(_ text: String) -> ParsedSide {
+        do {
+            return ParsedSide(node: try JSONParser.parse(text), error: nil)
+        } catch {
+            return ParsedSide(node: nil, error: error)
+        }
+    }
+
+    /// 将 Diff 内联文本同步到已打开的标签页（文件/标签目标），不写入磁盘或剪贴板。
+    private func syncOpenTargetsFromInlineText(workspace: WorkspaceViewModel) {
+        syncBindingTargetToWorkspace(left, workspace: workspace)
+        syncBindingTargetToWorkspace(right, workspace: workspace)
+    }
+
+    private func syncBindingTargetToWorkspace(_ side: DiffSideBinding, workspace: WorkspaceViewModel) {
+        switch side.applyTarget {
+        case .tab(let id):
+            workspace.tabs.first(where: { $0.id == id })?.applyExternalContent(side.inlineText)
+        case .file(let url):
+            workspace.tabs.first(where: { $0.fileURL == url })?.applyExternalContent(side.inlineText)
+        case .clipboard, .inlineOnly:
+            break
+        }
+    }
 
     private func revertSideIfDirty(_ side: inout DiffSideBinding, workspace: WorkspaceViewModel) {
         guard side.isFileDirty, case .file(let url) = side.applyTarget else { return }
