@@ -167,16 +167,16 @@ struct DiffView: View {
                 .foregroundStyle(Color(hex: "#858585"))
                 .lineLimit(1)
                 .frame(maxWidth: 120, alignment: .trailing)
-            Button("←") { model.apply(row: row, direction: .toLeft, workspace: workspace) }
+            Button("<<") { model.apply(row: row, direction: .toLeft, workspace: workspace) }
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(Color(hex: "#4fc1ff"))
                 .buttonStyle(.plain)
-                .help("Left ← Right")
-            Button("→") { model.apply(row: row, direction: .toRight, workspace: workspace) }
+                .help("<< Right into Left")
+            Button(">>") { model.apply(row: row, direction: .toRight, workspace: workspace) }
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(Color(hex: "#4fc1ff"))
                 .buttonStyle(.plain)
-                .help("Left → Right")
+                .help(">> Left into Right")
             Text(summary(row.rightValue))
                 .font(.system(size: 10, design: .monospaced))
                 .foregroundStyle(Color(hex: "#858585"))
