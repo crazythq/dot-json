@@ -200,10 +200,10 @@ struct DiffView: View {
 
     private func structuredRow(_ row: JSONDiff.Row) -> some View {
         HStack(spacing: 8) {
-            Text(kindLetter(row.kind))
-                .font(.system(size: 11, weight: .bold, design: .monospaced))
+            Text(kindStatusLabel(row.kind))
+                .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(kindColor(row.kind))
-                .frame(width: 16, alignment: .leading)
+                .frame(width: 58, alignment: .leading)
             Text(row.path.description.isEmpty ? "(root)" : row.path.description)
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundStyle(Color(hex: "#d4d4d4"))
@@ -235,11 +235,11 @@ struct DiffView: View {
         .background(Color(hex: "#1e1e1e"))
     }
 
-    private func kindLetter(_ kind: JSONDiff.Kind) -> String {
+    private func kindStatusLabel(_ kind: JSONDiff.Kind) -> String {
         switch kind {
-        case .add: return "A"
-        case .remove: return "D"
-        case .change: return "M"
+        case .add: return "Added"
+        case .remove: return "Deleted"
+        case .change: return "Modified"
         }
     }
 
