@@ -18,6 +18,39 @@ struct TextEditorViewTests {
         #expect(source.contains("window.makeFirstResponder(focusTarget)"))
     }
 
+    @Test func fileDropRoutesToOpenDocumentsHandler() throws {
+        let sourceURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/DotJSON/Views/TextEditorView.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+
+        #expect(source.contains("onFileURLsDropped"))
+        #expect(source.contains("FileDropPasteboard.fileURLs"))
+        #expect(source.contains("performDragOperation"))
+        #expect(source.contains("openDocuments(urls)"))
+    }
+
+    @Test func pasteWithFileURLPasteboardTypeOpensFilesInsteadOfInsertingPath() {
+        let pasteboard = NSPasteboard(name: .init("DotJSONTests.FilePaste"))
+        pasteboard.clearContents()
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("paste-open.json")
+        pasteboard.writeObjects([url as NSURL])
+
+        let textView = JSONTextView()
+        textView.sourcePasteboard = pasteboard
+        textView.string = #"{"keep":true}"#
+        var dropped: [URL] = []
+        textView.onFileURLsDropped = { dropped = $0 }
+
+        textView.paste(nil)
+
+        #expect(dropped == [url])
+        #expect(textView.string == #"{"keep":true}"#)
+    }
+
     @Test func standardPasteRoutesClipboardTextThroughHandler() {
         let pasteboard = NSPasteboard(name: .init("DotJSONTests.Paste"))
         pasteboard.clearContents()

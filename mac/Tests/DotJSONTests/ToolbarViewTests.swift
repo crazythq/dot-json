@@ -1,3 +1,4 @@
+import DotJSONCore
 import Foundation
 import Testing
 @testable import DotJSON
@@ -32,6 +33,37 @@ struct ToolbarViewTests {
     /// 验证格式化与压缩按钮使用成对的 JSON 结构矢量图标，同时保留原有操作。
     ///
     /// - Throws: 无法读取工具栏源码时抛出文件读取错误。
+    @Test func indentUsesCompactStandaloneAppKitPopUp() throws {
+        let source = try toolbarSource()
+        let popupSourceURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/DotJSON/Views/IndentPopUpButton.swift")
+        let popupSource = try String(contentsOf: popupSourceURL, encoding: .utf8)
+
+        #expect(source.contains("ToolbarItem(placement: .automatic)"))
+        #expect(source.contains("IndentPopUpButton(document: doc)"))
+        #expect(source.contains(".frame(width: IndentPopUpButton.toolbarWidth, height: 22)"))
+        #expect(!source.contains("Picker(\"Indent\""))
+        #expect(!source.contains("indentMenu(for:"))
+        #expect(!source.contains("Minify JSON\"\n            .help(\"Minify JSON\")\n\n            if let doc"))
+        #expect(popupSource.contains("NSPopUpButton"))
+        #expect(popupSource.contains("static let toolbarWidth: CGFloat = 100"))
+        #expect(popupSource.contains("controlSize = .small"))
+        #expect(popupSource.contains("option.label"))
+        #expect(popupSource.contains("document.indent"))
+    }
+
+    @Test func allIndentOptionsHaveVisibleEnglishTitles() {
+        for option in JSONFormatter.Indent.allCases {
+            #expect(!option.label.isEmpty)
+        }
+        #expect(JSONFormatter.Indent.twoSpaces.label == "2 spaces")
+        #expect(JSONFormatter.Indent.fourSpaces.label == "4 spaces")
+        #expect(JSONFormatter.Indent.tab.label == "Tab")
+    }
+
     @Test func jsonTransformButtonsUsePairedStructureIcons() throws {
         let source = try toolbarSource()
 
@@ -53,9 +85,9 @@ struct ToolbarViewTests {
 
         #expect(source.contains("toolbarIconButton(\"Import\", systemImage: \"square.and.arrow.down\")"))
         #expect(source.contains("private func importDocument()"))
-        #expect(source.contains("panel.allowsMultipleSelection = false"))
+        #expect(source.contains("panel.allowsMultipleSelection = true"))
         #expect(source.contains("let ws = WorkspaceViewModel.shared"))
-        #expect(source.contains("ws.openDocument(from: url)"))
+        #expect(source.contains("ws.openDocuments(panel.urls)"))
     }
 
     /// 验证导入和导出入口保留在同一个原生工具栏分组中。

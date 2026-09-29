@@ -22,6 +22,11 @@ struct ContentView: View {
                         .frame(minWidth: 200)
                         .background(Color(hex: "#252526"))
                 }
+                .dropDestination(for: URL.self) { urls, _ in
+                    guard !urls.isEmpty else { return false }
+                    workspace.openDocuments(urls)
+                    return true
+                }
                 .environment(doc)
             } else {
                 // 所有标签页已关闭时的空状态
@@ -47,11 +52,11 @@ struct ContentView: View {
             ToolbarView()
         }
         .onOpenURL { url in
-            workspace.openDocument(from: url)
+            workspace.openDocuments([url])
         }
         .dropDestination(for: URL.self) { urls, _ in
-            guard let url = urls.first else { return false }
-            workspace.openDocument(from: url)
+            guard !urls.isEmpty else { return false }
+            workspace.openDocuments(urls)
             return true
         }
         .sheet(isPresented: Binding(

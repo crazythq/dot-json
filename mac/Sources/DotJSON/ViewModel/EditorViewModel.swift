@@ -18,9 +18,16 @@ final class EditorViewModel: Identifiable {
                 return "Only local JSON files can be opened."
             case .unsupportedFileExtension(let fileExtension):
                 let displayedExtension = fileExtension.isEmpty ? "no extension" : ".\(fileExtension)"
-                return "Unsupported \(displayedExtension) file. MVP supports .json only."
+                return "Unsupported \(displayedExtension) file. Supported: .json, .txt, and extensionless files."
             }
         }
+    }
+
+    /// Whether the path extension is allowed for open / drop (empty = extensionless).
+    static func isAllowedOpenExtension(_ fileExtension: String) -> Bool {
+        if fileExtension.isEmpty { return true }
+        return fileExtension.caseInsensitiveCompare("json") == .orderedSame
+            || fileExtension.caseInsensitiveCompare("txt") == .orderedSame
     }
 
     /// 导出文件时使用的序列化格式。
@@ -235,13 +242,24 @@ final class EditorViewModel: Identifiable {
     }
 
     // MARK: - File
-    func loadDocument(from url: URL) throws {
+    func loadDocument(from url: URL, formatOnOpen: Bool = true) throws {
         guard url.isFileURL else { throw DocumentError.nonFileURL }
         let fileExtension = url.pathExtension
-        guard fileExtension.caseInsensitiveCompare("json") == .orderedSame else {
+        guard Self.isAllowedOpenExtension(fileExtension) else {
             throw DocumentError.unsupportedFileExtension(fileExtension)
         }
         try load(from: url)
+        if formatOnOpen {
+            applyFormatOnOpen()
+        }
+    }
+
+    /// Format/repair after load; disk snapshot stays in `savedText` so formatting marks the tab dirty when it changes text.
+    private func applyFormatOnOpen() {
+        let diskText = savedText
+        if let formatted = try? formattedOrRepaired(diskText) {
+            rawText = formatted
+        }
     }
 
     func load(from url: URL) throws {

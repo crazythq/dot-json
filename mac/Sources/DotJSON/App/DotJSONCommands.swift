@@ -51,16 +51,17 @@ struct DotJSONCommands: Commands {
 
     private func openFile() {
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.json]
-        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.json, .plainText]
+        panel.allowsOtherFileTypes = true
+        panel.allowsMultipleSelection = true
         panel.begin { r in
-            guard r == .OK, let url = panel.url, let ws = WorkspaceViewModel.shared else { return }
-            ws.openDocument(from: url)
+            guard r == .OK, let ws = WorkspaceViewModel.shared else { return }
+            ws.openDocuments(panel.urls)
         }
     }
 
     private func loadDocument(from url: URL) {
         guard let ws = WorkspaceViewModel.shared else { return }
-        ws.openDocument(from: url)
+        ws.openDocuments([url])
     }
 }

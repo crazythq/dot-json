@@ -22,6 +22,9 @@ final class JSONTextView: NSTextView {
     /// 获取到文本时调用的业务处理闭包。
     var onPaste: ((String) -> Void)?
 
+    /// Finder 文件拖入或粘贴时打开文档，避免把路径字符串插入编辑器。
+    var onFileURLsDropped: (([URL]) -> Void)?
+
     /// 配置为 NSScrollView 的可滚动深色纯文本 document view。
     ///
     /// 允许垂直扩展并让文本容器跟随视口宽度，长 JSON 行自动换行。
@@ -179,6 +182,11 @@ final class JSONTextView: NSTextView {
     ///
     /// - Parameter sender: 触发粘贴动作的菜单项或响应链对象。
     override func paste(_ sender: Any?) {
+        let fileURLs = FileDropPasteboard.fileURLs(from: sourcePasteboard)
+        if !fileURLs.isEmpty {
+            onFileURLsDropped?(fileURLs)
+            return
+        }
         // JSON 编辑器只接受纯文本，不能让富文本通过父类实现绕过格式化与校验。
         guard let text = sourcePasteboard.string(forType: .string) else { return }
         let isEmptyDocument = string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -187,6 +195,22 @@ final class JSONTextView: NSTextView {
         } else {
             insertText(text, replacementRange: selectedRange)
         }
+    }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        if FileDropPasteboard.containsFileURL(sender.draggingPasteboard) {
+            return .copy
+        }
+        return super.draggingEntered(sender)
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        let fileURLs = FileDropPasteboard.fileURLs(from: sender.draggingPasteboard)
+        if !fileURLs.isEmpty {
+            onFileURLsDropped?(fileURLs)
+            return true
+        }
+        return super.performDragOperation(sender)
     }
 
     /// 拦截 ⌘F，弹出原生查找栏。
@@ -262,6 +286,9 @@ struct TextEditorView: NSViewRepresentable {
         textView.delegate = context.coordinator
         textView.onPaste = { [weak coordinator = context.coordinator] text in
             coordinator?.pasteAndFormat(text)
+        }
+        textView.onFileURLsDropped = { urls in
+            WorkspaceViewModel.shared?.openDocuments(urls)
         }
         textView.allowsCharacterPickerTouchBarItem = false
 

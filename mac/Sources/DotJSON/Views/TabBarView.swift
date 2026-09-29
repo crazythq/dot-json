@@ -26,7 +26,12 @@ struct TabBarView: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundColor(Color(hex: "#858585"))
-                .help("New Tab")
+                .disabled(workspace.tabs.count >= WorkspaceViewModel.maxTabs)
+                .help(
+                    workspace.tabs.count >= WorkspaceViewModel.maxTabs
+                        ? WorkspaceViewModel.tabLimitAlertMessage
+                        : "New Tab"
+                )
                 .padding(.leading, 4)
             }
             .padding(.leading, 4)

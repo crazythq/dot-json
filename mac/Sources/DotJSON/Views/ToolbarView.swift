@@ -49,16 +49,13 @@ struct ToolbarView: ToolbarContent {
                 }
             }
             .help("Minify JSON")
+        }
 
+        ToolbarItem(placement: .automatic) {
             if let doc = workspace.activeDocument {
-                Picker("Indent", selection: Bindable(doc).indent) {
-                    ForEach(JSONFormatter.Indent.allCases, id: \.self) { o in
-                        Text(o.label).tag(o)
-                    }
-                }
-                .pickerStyle(.menu)
-                .frame(width: 100)
-                .help("Indent: 2 spaces / 4 spaces / Tab")
+                IndentPopUpButton(document: doc)
+                    .frame(width: IndentPopUpButton.toolbarWidth, height: 22)
+                    .help("Indent: 2 spaces / 4 spaces / Tab")
             }
         }
 
@@ -170,11 +167,12 @@ struct ToolbarView: ToolbarContent {
 
     private func importDocument() {
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.json]
-        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.json, .plainText]
+        panel.allowsOtherFileTypes = true
+        panel.allowsMultipleSelection = true
         panel.begin { response in
-            guard response == .OK, let url = panel.url, let ws = WorkspaceViewModel.shared else { return }
-            ws.openDocument(from: url)
+            guard response == .OK, let ws = WorkspaceViewModel.shared else { return }
+            ws.openDocuments(panel.urls)
         }
     }
 

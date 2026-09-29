@@ -151,4 +151,182 @@ struct WorkspaceViewModelTests {
 
         #expect(ws.needsCloseConfirmation(vm))
     }
+
+    // MARK: - Open documents
+
+    @Test func openDocumentsOpensMultipleFiles() throws {
+        let ws = WorkspaceViewModel()
+        ws.closeAllTabs()
+        ws.newTab()
+
+        let dir = FileManager.default.temporaryDirectory
+        let urls = (0..<3).map { i in
+            dir.appendingPathComponent("multi_open_\(i).json")
+        }
+        for (index, url) in urls.enumerated() {
+            try #"{"i":\#(index)}"#.write(to: url, atomically: true, encoding: .utf8)
+        }
+        defer { urls.forEach { try? FileManager.default.removeItem(at: $0) } }
+
+        ws.openDocuments(urls)
+
+        #expect(ws.tabs.count == 3)
+        #expect(Set(ws.tabs.compactMap(\.fileURL)) == Set(urls))
+    }
+
+    @Test func openDocumentWithDirtyUntitledAlwaysCreatesNewTab() throws {
+        let ws = WorkspaceViewModel()
+        let countBefore = ws.tabs.count
+        ws.newTab()
+        let dirtyIndex = countBefore
+        ws.tabs[dirtyIndex].rawText = #"{"dirty":true}"#
+
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("t_dirty_new_tab.json")
+        try #"{"file":1}"#.write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        ws.openDocument(from: url)
+
+        #expect(ws.tabs.count == countBefore + 2)
+        #expect(ws.tabs.last?.fileURL == url)
+    }
+
+    @Test func tabLimitBlocksNewTabAndFiresHook() {
+        let ws = WorkspaceViewModel()
+        var limitAlerts = 0
+        ws.onTabLimitReached = { limitAlerts += 1 }
+
+        while ws.tabs.count < WorkspaceViewModel.maxTabs {
+            ws.newTab()
+        }
+        ws.newTab()
+
+        #expect(ws.tabs.count == WorkspaceViewModel.maxTabs)
+        #expect(limitAlerts == 1)
+    }
+
+    @Test func tabLimitStopsFurtherOpensInOneOperation() throws {
+        let ws = WorkspaceViewModel()
+        var limitAlerts = 0
+        ws.onTabLimitReached = { limitAlerts += 1 }
+
+        while ws.tabs.count < WorkspaceViewModel.maxTabs - 1 {
+            ws.newTab()
+        }
+
+        let dir = FileManager.default.temporaryDirectory
+        let urls = (0..<2).map { i in dir.appendingPathComponent("limit_batch_\(i).json") }
+        for url in urls {
+            try #"{"k":1}"#.write(to: url, atomically: true, encoding: .utf8)
+        }
+        defer { urls.forEach { try? FileManager.default.removeItem(at: $0) } }
+
+        ws.openDocuments(urls)
+
+        #expect(ws.tabs.count == WorkspaceViewModel.maxTabs)
+        #expect(limitAlerts == 1)
+    }
+
+    @Test func openFileOnDiffSideLoadsSideAndMainTab() throws {
+        let ws = WorkspaceViewModel()
+        ws.presentDiffFromMenu()
+
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("t_diff_drop.json")
+        try #"{"diff":true}"#.write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        ws.openFileOnDiffSide(url, position: .left)
+
+        #expect(ws.diffViewModel?.left.label == url.lastPathComponent)
+        #expect(ws.diffViewModel?.left.inlineText.contains("diff") == true)
+        #expect(ws.tabs.contains { $0.fileURL == url })
+    }
+
+    @Test func rejectDiffMultiFileDropFiresHook() {
+        let ws = WorkspaceViewModel()
+        var rejected = false
+        ws.onDiffMultiFileDropRejected = { rejected = true }
+
+        ws.rejectDiffMultiFileDrop()
+
+        #expect(rejected)
+    }
+
+    @Test func diffMultiFileDropUsesLockedCompareTipString() {
+        #expect(
+            WorkspaceViewModel.diffMultiFileDropAlertMessage
+                == "Drop one file at a time while Compare is open."
+        )
+    }
+
+    @Test func openFileOnDiffSideDoesNotOpenTabWhenLoadFails() throws {
+        let ws = WorkspaceViewModel()
+        ws.presentDiffFromMenu()
+        let leftBefore = ws.diffViewModel?.left.label
+        let tabCountBefore = ws.tabs.count
+
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("t_diff_reject.xml")
+        try "<not json>".write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        ws.openFileOnDiffSide(url, position: .left)
+
+        #expect(ws.tabs.count == tabCountBefore)
+        #expect(ws.diffViewModel?.left.label == leftBefore)
+        #expect(ws.diffViewModel?.errorMessage != nil)
+    }
+
+    @Test func openFileOnDiffSideDoesNotClobberExistingModifiedTab() throws {
+        let ws = WorkspaceViewModel()
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("t_diff_preserve.json")
+        try "{'a':1}".write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        ws.openDocument(from: url)
+        guard let tab = ws.tabs.first(where: { $0.fileURL == url }) else {
+            Issue.record("Expected tab for opened file")
+            return
+        }
+        let formattedInTab = tab.rawText
+        #expect(tab.isModified)
+
+        ws.presentDiffFromMenu()
+        ws.openFileOnDiffSide(url, position: .left)
+
+        #expect(tab.rawText == formattedInTab)
+        #expect(tab.isModified)
+        #expect(ws.diffViewModel?.left.inlineText == "{'a':1}")
+        #expect(ws.activeTabIndex == ws.tabs.firstIndex(where: { $0.fileURL == url }))
+    }
+
+    @Test func openFileOnDiffSideAtTabLimitDoesNotUpdateDiffSide() throws {
+        let ws = WorkspaceViewModel()
+        var limitAlerts = 0
+        ws.onTabLimitReached = { limitAlerts += 1 }
+
+        while ws.tabs.count < WorkspaceViewModel.maxTabs {
+            ws.newTab()
+        }
+
+        ws.presentDiffFromMenu()
+        let leftLabelBefore = ws.diffViewModel?.left.label
+        let leftTextBefore = ws.diffViewModel?.left.inlineText
+
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("t_diff_limit_block.json")
+        try #"{"blocked":true}"#.write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        ws.openFileOnDiffSide(url, position: .left)
+
+        #expect(limitAlerts == 1)
+        #expect(ws.tabs.count == WorkspaceViewModel.maxTabs)
+        #expect(!ws.tabs.contains { $0.fileURL == url })
+        #expect(ws.diffViewModel?.left.label == leftLabelBefore)
+        #expect(ws.diffViewModel?.left.inlineText == leftTextBefore)
+    }
 }

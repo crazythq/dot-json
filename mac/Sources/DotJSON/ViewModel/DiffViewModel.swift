@@ -183,19 +183,31 @@ final class DiffViewModel {
 
     func pickFile(for position: DiffSidePosition, workspace: WorkspaceViewModel) {
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.json]
+        panel.allowedContentTypes = [.json, .plainText]
+        panel.allowsOtherFileTypes = true
         panel.allowsMultipleSelection = false
-        panel.begin { [weak self] response in
-            guard response == .OK, let url = panel.url, let self else { return }
-            let text = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
-            let binding = DiffSideBinding.fromFile(url: url, text: text)
-            switch position {
-            case .left: self.left = binding
-            case .right: self.right = binding
-            }
-            self.cancelPendingRefresh()
-            self.refresh()
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            workspace.openFileOnDiffSide(url, position: position)
         }
+    }
+
+    /// Load disk text into a Diff side (raw, unformatted). Caller typically also opens a main tab via `WorkspaceViewModel`.
+    func loadFile(url: URL, for position: DiffSidePosition, workspace: WorkspaceViewModel) throws {
+        guard url.isFileURL else { throw EditorViewModel.DocumentError.nonFileURL }
+        let fileExtension = url.pathExtension
+        guard EditorViewModel.isAllowedOpenExtension(fileExtension) else {
+            throw EditorViewModel.DocumentError.unsupportedFileExtension(fileExtension)
+        }
+        let diskText = try String(contentsOf: url, encoding: .utf8)
+        let binding = DiffSideBinding.fromFile(url: url, text: diskText)
+        switch position {
+        case .left: left = binding
+        case .right: right = binding
+        }
+        cancelPendingRefresh()
+        // Do not sync disk text onto an already-open tab (format-on-open / unsaved edits stay intact).
+        refresh(syncWorkspaceTargets: nil)
     }
 
     func useClipboard(for position: DiffSidePosition, workspace: WorkspaceViewModel) {
