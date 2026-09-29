@@ -253,4 +253,11 @@ struct WorkspaceViewModelTests {
 
         #expect(rejected)
     }
+
+    @Test func diffMultiFileDropUsesLockedCompareTipString() {
+        #expect(
+            WorkspaceViewModel.diffMultiFileDropAlertMessage
+                == "Drop one file at a time while Compare is open."
+        )
+    }
 }

@@ -22,7 +22,7 @@ final class WorkspaceViewModel {
 
     static let maxTabs = 20
     static let tabLimitAlertMessage = "Tab limit reached (20)"
-    static let diffMultiFileDropAlertMessage = "Drop only one file on a Diff pane."
+    static let diffMultiFileDropAlertMessage = "Drop one file at a time while Compare is open."
 
     /// Test hook: invoked instead of `NSAlert` when the tab limit blocks an operation.
     var onTabLimitReached: (() -> Void)?
