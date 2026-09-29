@@ -51,7 +51,7 @@ struct ToolbarViewTests {
     @Test func toolbarProvidesJSONImportAction() throws {
         let source = try toolbarSource()
 
-        #expect(source.contains("toolbarIconButton(\"导入\", systemImage: \"square.and.arrow.down\")"))
+        #expect(source.contains("toolbarIconButton(\"Import\", systemImage: \"square.and.arrow.down\")"))
         #expect(source.contains("private func importDocument()"))
         #expect(source.contains("panel.allowsMultipleSelection = false"))
         #expect(source.contains("let ws = WorkspaceViewModel.shared"))
@@ -66,8 +66,8 @@ struct ToolbarViewTests {
 
         #expect(source.contains("// ── 导入/导出 ──\n        ToolbarItem {"))
         #expect(source.contains("ControlGroup {"))
-        #expect(source.contains("toolbarIconButton(\"导入\", systemImage: \"square.and.arrow.down\")"))
-        #expect(source.contains("toolbarIconLabel(\"导出\", systemImage: \"square.and.arrow.up\")"))
+        #expect(source.contains("toolbarIconButton(\"Import\", systemImage: \"square.and.arrow.down\")"))
+        #expect(source.contains("toolbarIconLabel(\"Export\", systemImage: \"square.and.arrow.up\")"))
     }
 
     /// 验证搜索已从工具栏移除，不再使用 toolbar principal 占位和原生搜索控件。
@@ -129,8 +129,8 @@ struct ToolbarViewTests {
     @Test func importAndExportUseCompactToolbarIconLabels() throws {
         let source = try toolbarSource()
 
-        #expect(source.contains("toolbarIconButton(\"导入\", systemImage: \"square.and.arrow.down\")"))
-        #expect(source.contains("toolbarIconLabel(\"导出\", systemImage: \"square.and.arrow.up\")"))
+        #expect(source.contains("toolbarIconButton(\"Import\", systemImage: \"square.and.arrow.down\")"))
+        #expect(source.contains("toolbarIconLabel(\"Export\", systemImage: \"square.and.arrow.up\")"))
         #expect(source.contains("Label(title, systemImage: systemImage)"))
     }
 
