@@ -3,6 +3,7 @@ import AppKit
 
 @main
 struct DotJSONApp: App {
+    @NSApplicationDelegateAdaptor(DotJSONAppDelegate.self) private var appDelegate
     @State private var workspace = WorkspaceViewModel()
 
     init() {
@@ -91,5 +92,7 @@ private final class WindowConfigurationView: NSView {
         window.appearance = NSAppearance(named: .darkAqua)
         window.titlebarAppearsTransparent = false
         window.backgroundColor = NSColor(hex: "#1e1e1e")
+        // Per-window defense: custom in-window TabBar is the only multi-document UX.
+        window.tabbingMode = .disallowed
     }
 }

@@ -45,6 +45,34 @@ struct DotJSONAppTests {
         #expect(!source.contains("for window in NSApplication.shared.windows"))
     }
 
+    /// 验证应用通过 delegate、Info.plist 与 per-window 配置三层关闭 macOS 窗口合并标签。
+    ///
+    /// - Throws: 无法读取 App 源码或 Info.plist 时抛出文件读取错误。
+    @Test func appDisablesAutomaticWindowTabbingWithoutGlobalWindowIteration() throws {
+        let appSource = try appSource()
+        let delegateURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/DotJSON/App/AppDelegate.swift")
+        let delegateSource = try String(contentsOf: delegateURL, encoding: .utf8)
+
+        #expect(appSource.contains("@NSApplicationDelegateAdaptor(DotJSONAppDelegate.self)"))
+        #expect(delegateSource.contains("func applicationWillFinishLaunching"))
+        #expect(delegateSource.contains("NSWindow.allowsAutomaticWindowTabbing = false"))
+        #expect(appSource.contains("window.tabbingMode = .disallowed"))
+        #expect(!appSource.contains("for window in NSApplication.shared.windows"))
+
+        let plistURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Info.plist")
+        let plist = try String(contentsOf: plistURL, encoding: .utf8)
+        #expect(plist.contains("<key>NSAllowsAutomaticWindowTabbing</key>"))
+        #expect(plist.contains("<false/>"))
+    }
+
     /// 验证打包应用优先从主 Bundle 读取已经复制到 Resources 的图标。
     ///
     /// SwiftPM 的 `Bundle.module` 会在启动期重新遍历资源 Bundle；打包后的主 Bundle
