@@ -49,10 +49,12 @@ struct ToolbarView: ToolbarContent {
                 }
             }
             .help("Minify JSON")
+        }
 
+        ToolbarItem(placement: .automatic) {
             if let doc = workspace.activeDocument {
                 IndentPopUpButton(document: doc)
-                    .frame(width: IndentPopUpButton.toolbarWidth)
+                    .frame(width: IndentPopUpButton.toolbarWidth, height: 22)
                     .help("Indent: 2 spaces / 4 spaces / Tab")
             }
         }
