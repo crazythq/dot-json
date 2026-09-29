@@ -49,9 +49,13 @@ struct ToolbarView: ToolbarContent {
                 }
             }
             .help("Minify JSON")
+        }
 
+        ToolbarItem(placement: .automatic) {
             if let doc = workspace.activeDocument {
-                indentMenu(for: doc)
+                IndentPopUpButton(document: doc)
+                    .frame(minWidth: 96, minHeight: 28)
+                    .help("Indent: 2 spaces / 4 spaces / Tab")
             }
         }
 
@@ -127,30 +131,6 @@ struct ToolbarView: ToolbarContent {
             .controlGroupStyle(.navigation)
             .controlSize(.large)
         }
-    }
-
-    /// Indent menu — explicit `label` text avoids blank macOS toolbar `Picker` chrome.
-    private func indentMenu(for doc: EditorViewModel) -> some View {
-        Menu {
-            ForEach(JSONFormatter.Indent.allCases, id: \.self) { option in
-                Button {
-                    doc.indent = option
-                } label: {
-                    if doc.indent == option {
-                        Label(option.label, systemImage: "checkmark")
-                    } else {
-                        Text(option.label)
-                    }
-                }
-            }
-        } label: {
-            Text(doc.indent.label)
-                .font(.system(size: 13))
-                .foregroundStyle(.primary)
-                .frame(minWidth: 64, alignment: .leading)
-        }
-        .fixedSize()
-        .help("Indent: 2 spaces / 4 spaces / Tab")
     }
 
     private func toolbarIconButton(
