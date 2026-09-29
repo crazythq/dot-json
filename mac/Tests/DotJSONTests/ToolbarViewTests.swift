@@ -33,7 +33,7 @@ struct ToolbarViewTests {
     /// 验证格式化与压缩按钮使用成对的 JSON 结构矢量图标，同时保留原有操作。
     ///
     /// - Throws: 无法读取工具栏源码时抛出文件读取错误。
-    @Test func indentUsesAppKitPopUpOutsideIconToolbarGroup() throws {
+    @Test func indentUsesAppKitPopUpWithMainLikeWidthInToolbarGroup() throws {
         let source = try toolbarSource()
         let popupSourceURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -43,9 +43,12 @@ struct ToolbarViewTests {
         let popupSource = try String(contentsOf: popupSourceURL, encoding: .utf8)
 
         #expect(source.contains("IndentPopUpButton(document: doc)"))
+        #expect(source.contains(".frame(width: IndentPopUpButton.toolbarWidth)"))
+        #expect(source.contains("ToolbarItemGroup"))
         #expect(!source.contains("indentMenu(for:"))
         #expect(!source.contains("Picker(\"Indent\""))
         #expect(popupSource.contains("NSPopUpButton"))
+        #expect(popupSource.contains("static let toolbarWidth: CGFloat = 100"))
         #expect(popupSource.contains("option.label"))
         #expect(popupSource.contains("document.indent"))
     }
