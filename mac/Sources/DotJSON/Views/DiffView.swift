@@ -132,19 +132,25 @@ struct DiffView: View {
             }
         }
         .dropDestination(for: URL.self) { urls, _ in
-            if urls.count > 1 {
-                workspace.rejectDiffMultiFileDrop()
-                return false
-            }
-            guard let url = urls.first else { return false }
-            workspace.openFileOnDiffSide(url, position: position)
-            return true
+            handleDiffFileDrop(urls, position: position)
+            return urls.count == 1 && urls.first != nil
         }
     }
 
     private func sideTextEditor(position: DiffSidePosition) -> some View {
-        DiffSideTextEditor(text: sideTextBinding(position))
+        DiffSideTextEditor(text: sideTextBinding(position)) { urls in
+            handleDiffFileDrop(urls, position: position)
+        }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func handleDiffFileDrop(_ urls: [URL], position: DiffSidePosition) {
+        if urls.count > 1 {
+            workspace.rejectDiffMultiFileDrop()
+            return
+        }
+        guard let url = urls.first else { return }
+        workspace.openFileOnDiffSide(url, position: position)
     }
 
     private func sideTextBinding(_ position: DiffSidePosition) -> Binding<String> {
