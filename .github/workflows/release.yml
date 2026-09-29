@@ -42,9 +42,12 @@ jobs:
         run: |
           SEMVER="${GITHUB_REF_NAME#v}"
           BUILD_DIR="$(cd mac && swift build -c release --show-bin-path)"
+          APP_PATH="$BUILD_DIR/DotJSON.app"
+          test -d "$APP_PATH"
           ZIP_NAME="DotJSON-${SEMVER}-macos-adhoc.zip"
-          ditto -c -k --sequesterResource --keepParent \
-            "$BUILD_DIR/DotJSON.app" "$ZIP_NAME"
+          # Note: modern ditto has --sequesterRsrc, not --sequesterResource
+          ditto -c -k --keepParent "$APP_PATH" "$ZIP_NAME"
+          ls -lh "$ZIP_NAME"
           echo "zip_name=$ZIP_NAME" >> "$GITHUB_OUTPUT"
           echo "semver=$SEMVER" >> "$GITHUB_OUTPUT"
 
