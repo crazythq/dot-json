@@ -25,6 +25,8 @@ struct TabBarView: View {
     @State private var tabFrames: [UUID: CGRect] = [:]
     @State private var suppressTabActivation = false
     @State private var autoScrollDirection: Int = 0
+    /// Last tab id passed to `scrollTo`; used to walk further when geometry still overlaps the same target.
+    @State private var autoScrollLastTargetId: UUID?
 
     var body: some View {
         ScrollViewReader { scrollProxy in
@@ -87,6 +89,11 @@ struct TabBarView: View {
             .onPreferenceChange(TabBarItemFrameKey.self) { tabFrames = $0 }
             .onChange(of: dragGlobalLocation) { _, _ in
                 updateAutoScroll()
+            }
+            .onChange(of: autoScrollDirection) { oldValue, newValue in
+                if oldValue != newValue {
+                    autoScrollLastTargetId = nil
+                }
             }
             .onChange(of: draggingTabId) { _, id in
                 if id == nil {
@@ -210,20 +217,28 @@ struct TabBarView: View {
 
     @MainActor
     private func performAutoScrollStep(direction: Int, scrollProxy: ScrollViewProxy) {
-        guard let draggingTabId,
-              let currentIndex = workspace.tabs.firstIndex(where: { $0.id == draggingTabId }) else { return }
+        guard draggingTabId != nil, !barGlobalFrame.isEmpty else { return }
 
-        let neighbor = currentIndex + direction
-        guard workspace.tabs.indices.contains(neighbor) else { return }
-        let neighborId = workspace.tabs[neighbor].id
+        let orderedIds = workspace.tabs.map(\.id)
+        let towardLeading = direction < 0
+        guard let targetId = TabBarAutoScrollLogic.scrollTargetTabId(
+            orderedTabIds: orderedIds,
+            tabFrames: tabFrames,
+            visibleClip: barGlobalFrame,
+            towardLeading: towardLeading,
+            advancingFrom: autoScrollLastTargetId
+        ) else { return }
+
+        autoScrollLastTargetId = targetId
         withAnimation(.linear(duration: Self.autoScrollInterval)) {
-            scrollProxy.scrollTo(neighborId, anchor: direction < 0 ? .leading : .trailing)
+            scrollProxy.scrollTo(targetId, anchor: towardLeading ? .leading : .trailing)
         }
         insertionIndex = insertionIndex(forGlobalX: dragGlobalLocation.x)
     }
 
     private func stopAutoScroll() {
         autoScrollDirection = 0
+        autoScrollLastTargetId = nil
     }
 }
 
