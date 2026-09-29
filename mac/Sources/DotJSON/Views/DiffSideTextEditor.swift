@@ -1,28 +1,18 @@
 import SwiftUI
 import AppKit
 
-/// Diff pane editor: rejects Finder file drops so paths are not pasted as text (handled by `dropDestination`).
+/// Diff pane editor: rejects Finder file drags so paths are not pasted as text (handled by SwiftUI `dropDestination`).
 final class DiffPaneTextView: NSTextView {
 
-    static func pasteboardContainsFileURL(_ pasteboard: NSPasteboard) -> Bool {
-        if pasteboard.canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) {
-            return true
-        }
-        if let string = pasteboard.string(forType: .fileURL), !string.isEmpty {
-            return true
-        }
-        return false
-    }
-
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
-        if Self.pasteboardContainsFileURL(sender.draggingPasteboard) {
+        if FileDropPasteboard.containsFileURL(sender.draggingPasteboard) {
             return []
         }
         return super.draggingEntered(sender)
     }
 
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
-        if Self.pasteboardContainsFileURL(sender.draggingPasteboard) {
+        if FileDropPasteboard.containsFileURL(sender.draggingPasteboard) {
             return false
         }
         return super.performDragOperation(sender)

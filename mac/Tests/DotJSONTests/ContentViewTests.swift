@@ -37,6 +37,19 @@ struct ContentViewTests {
     }
 
     /// 验证 AppKit 搜索框显式使用可读的深色前景、背景和占位符。
+    @Test func editorSplitViewAcceptsFileDropForOpenDocuments() throws {
+        let sourceURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/DotJSON/Views/ContentView.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+
+        #expect(source.contains("HSplitView"))
+        #expect(source.contains("workspace.openDocuments(urls)"))
+        #expect(source.contains(".dropDestination(for: URL.self)"))
+    }
+
     @Test func treeSearchFieldUsesExplicitDarkThemeColors() throws {
         let sourceURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

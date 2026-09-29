@@ -43,7 +43,7 @@ struct DiffViewTests {
         let source = try String(contentsOf: sourceURL, encoding: .utf8)
 
         #expect(source.contains("final class DiffPaneTextView"))
-        #expect(source.contains("pasteboardContainsFileURL"))
+        #expect(source.contains("FileDropPasteboard.containsFileURL"))
         #expect(source.contains("performDragOperation"))
         #expect(source.contains("return false"))
     }
