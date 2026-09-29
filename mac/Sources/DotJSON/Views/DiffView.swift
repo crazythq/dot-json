@@ -122,6 +122,15 @@ struct DiffView: View {
 
             sideTextEditor(position: position)
                 .background(Color(hex: "#1e1e1e"))
+                .dropDestination(for: URL.self) { urls, _ in
+                    if urls.count > 1 {
+                        workspace.rejectDiffMultiFileDrop()
+                        return false
+                    }
+                    guard let url = urls.first else { return false }
+                    workspace.openFileOnDiffSide(url, position: position)
+                    return true
+                }
 
             if let parseError = sideParseError(position) {
                 Text(parseError)

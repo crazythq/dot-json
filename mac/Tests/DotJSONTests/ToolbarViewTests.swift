@@ -53,9 +53,9 @@ struct ToolbarViewTests {
 
         #expect(source.contains("toolbarIconButton(\"Import\", systemImage: \"square.and.arrow.down\")"))
         #expect(source.contains("private func importDocument()"))
-        #expect(source.contains("panel.allowsMultipleSelection = false"))
+        #expect(source.contains("panel.allowsMultipleSelection = true"))
         #expect(source.contains("let ws = WorkspaceViewModel.shared"))
-        #expect(source.contains("ws.openDocument(from: url)"))
+        #expect(source.contains("ws.openDocuments(panel.urls)"))
     }
 
     /// 验证导入和导出入口保留在同一个原生工具栏分组中。

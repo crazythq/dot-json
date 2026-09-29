@@ -20,6 +20,15 @@ final class WorkspaceViewModel {
 
     nonisolated(unsafe) static weak var shared: WorkspaceViewModel?
 
+    static let maxTabs = 20
+    static let tabLimitAlertMessage = "Tab limit reached (20)"
+    static let diffMultiFileDropAlertMessage = "Drop only one file on a Diff pane."
+
+    /// Test hook: invoked instead of `NSAlert` when the tab limit blocks an operation.
+    var onTabLimitReached: (() -> Void)?
+    /// Test hook: invoked instead of `NSAlert` when multiple files are dropped on a Diff pane.
+    var onDiffMultiFileDropRejected: (() -> Void)?
+
     private(set) var tabs: [EditorViewModel] = []
     var activeTabIndex: Int = -1
     var recentFiles: [URL] = []
@@ -45,6 +54,10 @@ final class WorkspaceViewModel {
     // MARK: - Tab Management
 
     func newTab() {
+        guard tabs.count < Self.maxTabs else {
+            notifyTabLimitReached()
+            return
+        }
         let vm = EditorViewModel()
         vm.untitledNumber = nextUntitledNumber
         nextUntitledNumber += 1
@@ -151,6 +164,10 @@ final class WorkspaceViewModel {
     /// 复制指定标签页为新标签页：内容与原页相同，作为未命名标签页插入并激活。
     func duplicateTab(at index: Int) {
         guard tabs.indices.contains(index) else { return }
+        guard tabs.count < Self.maxTabs else {
+            notifyTabLimitReached()
+            return
+        }
         let source = tabs[index]
         let vm = EditorViewModel()
         vm.untitledNumber = nextUntitledNumber
@@ -327,13 +344,36 @@ final class WorkspaceViewModel {
 
     // MARK: - Document Operations
 
+    /// Opens one or more local files through the same tab/format/limit rules as menu open and drop.
+    func openDocuments(_ urls: [URL]) {
+        guard !urls.isEmpty else { return }
+        var limitAlertShown = false
+        for url in urls {
+            guard wouldOpenWithoutAddingTab(url) || tabs.count < Self.maxTabs else {
+                if !limitAlertShown {
+                    notifyTabLimitReached()
+                    limitAlertShown = true
+                }
+                break
+            }
+            openDocument(from: url)
+        }
+    }
+
     func openDocument(from url: URL) {
         if let existingIndex = tabs.firstIndex(where: { $0.fileURL == url }) {
             activeTabIndex = existingIndex
             return
         }
 
-        if tabs.count == 1, tabs[0].fileURL == nil, !tabs[0].isModified {
+        if !wouldOpenWithoutAddingTab(url) {
+            guard tabs.count < Self.maxTabs else {
+                notifyTabLimitReached()
+                return
+            }
+        }
+
+        if canReplaceUniqueCleanUntitledTab() {
             do {
                 let vm = tabs[0]
                 try vm.loadDocument(from: url)
@@ -352,6 +392,59 @@ final class WorkspaceViewModel {
             if let active = activeDocument {
                 active.reportFileError(error)
             }
+        }
+    }
+
+    /// Diff pane drop / picker: load raw file text on one side and open a main-window tab (format-on-open).
+    func openFileOnDiffSide(_ url: URL, position: DiffSidePosition) {
+        guard let diff = diffViewModel else { return }
+        do {
+            try diff.loadFile(url: url, for: position, workspace: self)
+        } catch {
+            diff.reportError(error)
+        }
+        openDocument(from: url)
+    }
+
+    func rejectDiffMultiFileDrop() {
+        notifyDiffMultiFileDropRejected()
+    }
+
+    /// Whether opening `url` only activates an existing tab or replaces the lone clean untitled tab.
+    func wouldOpenWithoutAddingTab(_ url: URL) -> Bool {
+        if tabs.contains(where: { $0.fileURL == url }) { return true }
+        return canReplaceUniqueCleanUntitledTab()
+    }
+
+    private func canReplaceUniqueCleanUntitledTab() -> Bool {
+        tabs.count == 1 && tabs[0].fileURL == nil && !tabs[0].isModified
+    }
+
+    private func notifyTabLimitReached() {
+        if let onTabLimitReached {
+            onTabLimitReached()
+        } else {
+            presentInformationAlert(messageText: Self.tabLimitAlertMessage)
+        }
+    }
+
+    private func notifyDiffMultiFileDropRejected() {
+        if let onDiffMultiFileDropRejected {
+            onDiffMultiFileDropRejected()
+        } else {
+            presentInformationAlert(messageText: Self.diffMultiFileDropAlertMessage)
+        }
+    }
+
+    private func presentInformationAlert(messageText: String) {
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = messageText
+        alert.addButton(withTitle: "OK")
+        if let window = NSApp.keyWindow {
+            alert.beginSheetModal(for: window) { _ in }
+        } else {
+            alert.runModal()
         }
     }
 
@@ -451,7 +544,7 @@ final class WorkspaceViewModel {
         for url in urls {
             let vm = EditorViewModel()
             do {
-                try vm.loadDocument(from: url)
+                try vm.loadDocument(from: url, formatOnOpen: false)
                 tabs.append(vm)
             } catch {
                 // 文件已被删除或不可读，跳过。

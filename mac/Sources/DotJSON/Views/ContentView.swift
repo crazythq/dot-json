@@ -47,11 +47,11 @@ struct ContentView: View {
             ToolbarView()
         }
         .onOpenURL { url in
-            workspace.openDocument(from: url)
+            workspace.openDocuments([url])
         }
         .dropDestination(for: URL.self) { urls, _ in
-            guard let url = urls.first else { return false }
-            workspace.openDocument(from: url)
+            guard !urls.isEmpty else { return false }
+            workspace.openDocuments(urls)
             return true
         }
         .sheet(isPresented: Binding(

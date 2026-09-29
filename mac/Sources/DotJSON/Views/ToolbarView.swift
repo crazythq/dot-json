@@ -170,11 +170,12 @@ struct ToolbarView: ToolbarContent {
 
     private func importDocument() {
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.json]
-        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.json, .plainText]
+        panel.allowsOtherFileTypes = true
+        panel.allowsMultipleSelection = true
         panel.begin { response in
-            guard response == .OK, let url = panel.url, let ws = WorkspaceViewModel.shared else { return }
-            ws.openDocument(from: url)
+            guard response == .OK, let ws = WorkspaceViewModel.shared else { return }
+            ws.openDocuments(panel.urls)
         }
     }
 

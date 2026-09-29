@@ -23,4 +23,12 @@ struct DiffViewTests {
         #expect(!source.contains(#"return "A""#))
         #expect(!source.contains(#"return "D""#))
     }
+
+    @Test func diffSideEditorsAcceptSingleFileDrop() throws {
+        let source = try diffViewSource()
+
+        #expect(source.contains(".dropDestination(for: URL.self)"))
+        #expect(source.contains("workspace.rejectDiffMultiFileDrop()"))
+        #expect(source.contains("workspace.openFileOnDiffSide(url, position: position)"))
+    }
 }

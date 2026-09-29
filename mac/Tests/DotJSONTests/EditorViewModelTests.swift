@@ -139,7 +139,7 @@ struct EditorViewModelTests {
         let vm = EditorViewModel()
         vm.rawText = #"{"original":true}"#
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("unsupported.txt")
+            .appendingPathComponent("unsupported.xml")
         try #"{"replacement":true}"#.write(to: url, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: url) }
 
@@ -148,6 +148,67 @@ struct EditorViewModelTests {
         }
         #expect(vm.rawText == #"{"original":true}"#)
         #expect(vm.fileURL == nil)
+    }
+
+    @Test func loadDocumentAcceptsTxtExtension() throws {
+        let vm = EditorViewModel()
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("payload.txt")
+        try #"{"from":"txt"}"#.write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        try vm.loadDocument(from: url)
+
+        #expect(vm.fileURL == url)
+        #expect(vm.treeRoot != nil)
+    }
+
+    @Test func loadDocumentAcceptsExtensionlessFile() throws {
+        let vm = EditorViewModel()
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("extensionless_payload")
+        try #"{"no":"extension"}"#.write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        try vm.loadDocument(from: url)
+
+        #expect(vm.fileURL == url)
+        #expect(vm.treeRoot != nil)
+    }
+
+    @Test func isAllowedOpenExtensionAllowsJsonTxtAndExtensionless() {
+        #expect(EditorViewModel.isAllowedOpenExtension(""))
+        #expect(EditorViewModel.isAllowedOpenExtension("json"))
+        #expect(EditorViewModel.isAllowedOpenExtension("JSON"))
+        #expect(EditorViewModel.isAllowedOpenExtension("txt"))
+        #expect(!EditorViewModel.isAllowedOpenExtension("xml"))
+    }
+
+    @Test func loadDocumentMarksDirtyWhenFormattingChangesText() throws {
+        let vm = EditorViewModel()
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("t_format_dirty.json")
+        try "{'a':1,'b':2}".write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        try vm.loadDocument(from: url)
+
+        #expect(vm.isModified)
+        #expect(vm.treeRoot != nil)
+    }
+
+    @Test func loadDocumentStaysCleanWhenFormattingMatchesDisk() throws {
+        let vm = EditorViewModel()
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("t_format_clean.json")
+        let disk = try JSONFormatter.format(#"{"a":1,"b":2}"#, indent: .fourSpaces)
+        try disk.write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        try vm.loadDocument(from: url)
+
+        #expect(!vm.isModified)
+        #expect(vm.rawText == disk)
     }
     @Test func saveToFileURL() throws {
         let vm = EditorViewModel()
