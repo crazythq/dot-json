@@ -10,10 +10,22 @@ permissions:
 
 jobs:
   release-macos:
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Select Xcode (Swift 6+)
+        run: |
+          # Prefer newest Xcode 16+ on the image for swift-tools-version 6.0
+          for app in /Applications/Xcode_16*.app /Applications/Xcode.app; do
+            if [ -d "$app" ]; then
+              sudo xcode-select -s "$app"
+              break
+            fi
+          done
+          xcodebuild -version
+          swift --version
 
       - name: Test
         run: |
