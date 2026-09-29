@@ -5,7 +5,7 @@
 1. 在 `mac/Info.plist` 中更新 `CFBundleShortVersionString`（以及按需更新 `CFBundleVersion`）。
 2. 提交并合并到 `main`。
 3. 创建并推送标签：`git tag vX.Y.Z && git push origin vX.Y.Z`（标签需以 `v` 开头，例如 `v1.0.1`）。
-4. GitHub Actions [Release](../.github/workflows/release.yml) 会在 `macos-14` 上运行 `swift test`、以 release 配置执行 `mac/build-app.sh -c release`，并上传 `DotJSON-X.Y.Z-macos-adhoc.zip` 到对应 GitHub Release。
+4. GitHub Actions [Release](../.github/workflows/release.yml) 会在 `macos-15` 上运行 `swift test`、以 release 配置执行 `mac/build-app.sh -c release`，并上传 `DotJSON-X.Y.Z-macos-adhoc.zip` 到对应 GitHub Release。
 
 ## 产物说明
 
