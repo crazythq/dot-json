@@ -3,6 +3,7 @@ import Foundation
 import Testing
 @testable import DotJSON
 
+@MainActor
 struct DiffViewTests {
 
     private func diffViewSource() throws -> String {
