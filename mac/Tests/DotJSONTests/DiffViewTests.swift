@@ -30,5 +30,21 @@ struct DiffViewTests {
         #expect(source.contains(".dropDestination(for: URL.self)"))
         #expect(source.contains("workspace.rejectDiffMultiFileDrop()"))
         #expect(source.contains("workspace.openFileOnDiffSide(url, position: position)"))
+        #expect(source.contains("DiffSideTextEditor"))
+        #expect(!source.contains("TextEditor(text: sideTextBinding"))
+    }
+
+    @Test func diffPaneTextViewRejectsFileURLDragPaste() throws {
+        let sourceURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/DotJSON/Views/DiffSideTextEditor.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+
+        #expect(source.contains("final class DiffPaneTextView"))
+        #expect(source.contains("pasteboardContainsFileURL"))
+        #expect(source.contains("performDragOperation"))
+        #expect(source.contains("return false"))
     }
 }
