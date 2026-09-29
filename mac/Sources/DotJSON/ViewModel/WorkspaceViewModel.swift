@@ -398,10 +398,15 @@ final class WorkspaceViewModel {
     /// Diff pane drop / picker: load raw file text on one side and open a main-window tab (format-on-open).
     func openFileOnDiffSide(_ url: URL, position: DiffSidePosition) {
         guard let diff = diffViewModel else { return }
+        guard wouldOpenWithoutAddingTab(url) || tabs.count < Self.maxTabs else {
+            notifyTabLimitReached()
+            return
+        }
         do {
             try diff.loadFile(url: url, for: position, workspace: self)
         } catch {
             diff.reportError(error)
+            return
         }
         openDocument(from: url)
     }

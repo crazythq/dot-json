@@ -186,14 +186,9 @@ final class DiffViewModel {
         panel.allowedContentTypes = [.json, .plainText]
         panel.allowsOtherFileTypes = true
         panel.allowsMultipleSelection = false
-        panel.begin { [weak self] response in
-            guard response == .OK, let url = panel.url, let self else { return }
-            do {
-                try self.loadFile(url: url, for: position, workspace: workspace)
-                workspace.openDocument(from: url)
-            } catch {
-                self.reportError(error)
-            }
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            workspace.openFileOnDiffSide(url, position: position)
         }
     }
 
@@ -211,7 +206,8 @@ final class DiffViewModel {
         case .right: right = binding
         }
         cancelPendingRefresh()
-        refresh(syncWorkspaceTargets: workspace)
+        // Do not sync disk text onto an already-open tab (format-on-open / unsaved edits stay intact).
+        refresh(syncWorkspaceTargets: nil)
     }
 
     func useClipboard(for position: DiffSidePosition, workspace: WorkspaceViewModel) {
