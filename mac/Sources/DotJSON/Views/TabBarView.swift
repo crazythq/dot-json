@@ -25,7 +25,6 @@ struct TabBarView: View {
     @State private var tabFrames: [UUID: CGRect] = [:]
     @State private var suppressTabActivation = false
     @State private var autoScrollDirection: Int = 0
-    @State private var autoScrollTimer: Timer?
 
     var body: some View {
         ScrollViewReader { scrollProxy in
@@ -45,7 +44,7 @@ struct TabBarView: View {
                                     handleReorderDragChanged(tabId: tab.id, value: value)
                                 },
                                 onReorderDragEnded: { value in
-                                    finishReorderDrag(tabId: tab.id, value: value, scrollProxy: scrollProxy)
+                                    finishReorderDrag(tabId: tab.id, value: value)
                                 }
                             )
                             .id(tab.id)
@@ -87,12 +86,20 @@ struct TabBarView: View {
             }
             .onPreferenceChange(TabBarItemFrameKey.self) { tabFrames = $0 }
             .onChange(of: dragGlobalLocation) { _, _ in
-                updateAutoScroll(scrollProxy: scrollProxy)
+                updateAutoScroll()
             }
             .onChange(of: draggingTabId) { _, id in
                 if id == nil {
                     stopAutoScroll()
                 }
+            }
+            .onReceive(
+                Timer.publish(every: Self.autoScrollInterval, on: .main, in: .common).autoconnect()
+            ) { _ in
+                guard autoScrollDirection != 0,
+                      draggingTabId != nil,
+                      !dragCancelled else { return }
+                performAutoScrollStep(direction: autoScrollDirection, scrollProxy: scrollProxy)
             }
         }
         .frame(height: Self.barHeight)
@@ -147,11 +154,7 @@ struct TabBarView: View {
         insertionIndex = insertionIndex(forGlobalX: dragGlobalLocation.x)
     }
 
-    private func finishReorderDrag(
-        tabId: UUID,
-        value: DragGesture.Value,
-        scrollProxy: ScrollViewProxy
-    ) {
+    private func finishReorderDrag(tabId: UUID, value: DragGesture.Value) {
         defer {
             if dragExceededThreshold {
                 suppressTabActivation = true
@@ -172,7 +175,6 @@ struct TabBarView: View {
 
         workspace.moveTab(from: sourceIndex, to: targetIndex)
         _ = value
-        _ = scrollProxy
     }
 
     /// Maps horizontal position to “insert before index” (0…tabCount).
@@ -187,7 +189,7 @@ struct TabBarView: View {
         return orderedIDs.count
     }
 
-    private func updateAutoScroll(scrollProxy: ScrollViewProxy) {
+    private func updateAutoScroll() {
         guard draggingTabId != nil, !dragCancelled, !barGlobalFrame.isEmpty else {
             stopAutoScroll()
             return
@@ -197,23 +199,12 @@ struct TabBarView: View {
         let leftEdge = barGlobalFrame.minX + Self.autoScrollEdgeBand
         let rightEdge = barGlobalFrame.maxX - Self.autoScrollEdgeBand
 
-        let direction: Int
         if x < leftEdge {
-            direction = -1
+            autoScrollDirection = -1
         } else if x > rightEdge {
-            direction = 1
+            autoScrollDirection = 1
         } else {
             stopAutoScroll()
-            return
-        }
-
-        guard direction != autoScrollDirection || autoScrollTimer == nil else { return }
-        autoScrollDirection = direction
-        autoScrollTimer?.invalidate()
-        autoScrollTimer = Timer.scheduledTimer(withTimeInterval: Self.autoScrollInterval, repeats: true) { _ in
-            Task { @MainActor in
-                performAutoScrollStep(direction: direction, scrollProxy: scrollProxy)
-            }
         }
     }
 
@@ -232,14 +223,12 @@ struct TabBarView: View {
     }
 
     private func stopAutoScroll() {
-        autoScrollTimer?.invalidate()
-        autoScrollTimer = nil
         autoScrollDirection = 0
     }
 }
 
 private struct TabBarItemFrameKey: PreferenceKey {
-    static var defaultValue: [UUID: CGRect] = [:]
+    static var defaultValue: [UUID: CGRect] { [:] }
 
     static func reduce(value: inout [UUID: CGRect], nextValue: () -> [UUID: CGRect]) {
         value.merge(nextValue(), uniquingKeysWith: { _, new in new })
