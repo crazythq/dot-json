@@ -303,6 +303,69 @@ struct WorkspaceViewModelTests {
         #expect(ws.activeTabIndex == ws.tabs.firstIndex(where: { $0.fileURL == url }))
     }
 
+    // MARK: - Tab reorder
+
+    /// Reordering updates tab array order and persists active selection by tab id.
+    @Test func moveTabReordersTabs() {
+        let ws = WorkspaceViewModel()
+        ws.closeAllTabs()
+        ws.newTab()
+        ws.newTab()
+        ws.newTab()
+        let ids = ws.tabs.map(\.id)
+        #expect(ids.count == 3)
+
+        ws.moveTab(from: 0, to: 3)
+
+        #expect(ws.tabs.map(\.id) == [ids[1], ids[2], ids[0]])
+    }
+
+    /// When a non-dragged tab stays active, reorder must not change which document is active.
+    @Test func moveTabKeepsActiveTabByIdWhenDraggingOtherTab() {
+        let ws = WorkspaceViewModel()
+        ws.closeAllTabs()
+        ws.newTab()
+        ws.newTab()
+        ws.newTab()
+        ws.activateTab(at: 0)
+        let activeId = ws.tabs[0].id
+
+        ws.moveTab(from: 2, to: 0)
+
+        #expect(ws.activeDocument === ws.tabs.first { $0.id == activeId })
+        #expect(ws.tabs[ws.activeTabIndex].id == activeId)
+    }
+
+    /// Moving the active tab must keep that tab active after drop.
+    @Test func moveTabKeepsActiveWhenDraggingActiveTab() {
+        let ws = WorkspaceViewModel()
+        ws.closeAllTabs()
+        ws.newTab()
+        ws.newTab()
+        ws.activateTab(at: 1)
+        let activeId = ws.tabs[1].id
+
+        ws.moveTab(from: 1, to: 0)
+
+        #expect(ws.tabs[ws.activeTabIndex].id == activeId)
+        #expect(ws.activeTabIndex == 0)
+    }
+
+    @Test func moveTabNoOpForInvalidOrSameDestination() {
+        let ws = WorkspaceViewModel()
+        ws.closeAllTabs()
+        ws.newTab()
+        ws.newTab()
+        let before = ws.tabs.map(\.id)
+
+        ws.moveTab(from: -1, to: 0)
+        ws.moveTab(from: 0, to: 99)
+        ws.moveTab(from: 0, to: 1)
+        ws.moveTab(from: 0, to: 0)
+
+        #expect(ws.tabs.map(\.id) == before)
+    }
+
     @Test func openFileOnDiffSideAtTabLimitDoesNotUpdateDiffSide() throws {
         let ws = WorkspaceViewModel()
         var limitAlerts = 0
