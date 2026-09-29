@@ -129,6 +129,30 @@ struct ToolbarView: ToolbarContent {
         }
     }
 
+    /// Indent menu — explicit `label` text avoids blank macOS toolbar `Picker` chrome.
+    private func indentMenu(for doc: EditorViewModel) -> some View {
+        Menu {
+            ForEach(JSONFormatter.Indent.allCases, id: \.self) { option in
+                Button {
+                    doc.indent = option
+                } label: {
+                    if doc.indent == option {
+                        Label(option.label, systemImage: "checkmark")
+                    } else {
+                        Text(option.label)
+                    }
+                }
+            }
+        } label: {
+            Text(doc.indent.label)
+                .font(.system(size: 13))
+                .foregroundStyle(.primary)
+                .frame(minWidth: 64, alignment: .leading)
+        }
+        .fixedSize()
+        .help("Indent: 2 spaces / 4 spaces / Tab")
+    }
+
     private func toolbarIconButton(
         _ title: String,
         systemImage: String,

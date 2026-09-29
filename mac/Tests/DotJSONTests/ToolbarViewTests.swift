@@ -1,3 +1,4 @@
+import DotJSONCore
 import Foundation
 import Testing
 @testable import DotJSON
@@ -32,6 +33,23 @@ struct ToolbarViewTests {
     /// 验证格式化与压缩按钮使用成对的 JSON 结构矢量图标，同时保留原有操作。
     ///
     /// - Throws: 无法读取工具栏源码时抛出文件读取错误。
+    @Test func indentMenuAlwaysShowsNonEmptyEnglishLabel() throws {
+        let source = try toolbarSource()
+
+        #expect(source.contains("private func indentMenu(for doc: EditorViewModel)"))
+        #expect(source.contains("Text(doc.indent.label)"))
+        #expect(!source.contains("Picker(\"Indent\""))
+    }
+
+    @Test func allIndentOptionsHaveVisibleEnglishTitles() {
+        for option in JSONFormatter.Indent.allCases {
+            #expect(!option.label.isEmpty)
+        }
+        #expect(JSONFormatter.Indent.twoSpaces.label == "2 spaces")
+        #expect(JSONFormatter.Indent.fourSpaces.label == "4 spaces")
+        #expect(JSONFormatter.Indent.tab.label == "Tab")
+    }
+
     @Test func jsonTransformButtonsUsePairedStructureIcons() throws {
         let source = try toolbarSource()
 
