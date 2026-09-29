@@ -26,7 +26,7 @@ struct TabBarView: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundColor(Color(hex: "#858585"))
-                .help("新建标签页")
+                .help("New Tab")
                 .padding(.leading, 4)
             }
             .padding(.leading, 4)
@@ -55,7 +55,7 @@ private struct TabBarItemView: View {
     var body: some View {
         HStack(spacing: 4) {
             if isEditingTitle {
-                TextField("命名", text: $editingTitle)
+                TextField("Name", text: $editingTitle)
                     .textFieldStyle(.plain)
                     .font(.system(size: 11))
                     .foregroundStyle(Color(hex: "#ffffff"))
@@ -140,6 +140,14 @@ private struct TabBarItemView: View {
             } label: {
                 Text("tab.context.duplicate", bundle: .module)
             }
+            Divider()
+            Button {
+                let focused = workspace.activeTabIndex
+                workspace.presentDiff(focusedTabIndex: focused, otherTabIndex: index)
+            } label: {
+                Text("tab.context.compare", bundle: .module)
+            }
+            .disabled(workspace.activeTabIndex < 0 || index == workspace.activeTabIndex)
         }
     }
 

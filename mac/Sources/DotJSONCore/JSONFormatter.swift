@@ -40,6 +40,11 @@ public enum JSONFormatter {
         return try prettyPrint(object, indent: indent.rawValue)
     }
 
+    /// 将已解析树格式化为可读 JSON（与 `format(_:indent:)` 使用相同缩进规则）。
+    public static func format(_ node: JSONNode, indent: Indent = .fourSpaces) throws -> String {
+        try format(JSONParser.serialize(node), indent: indent)
+    }
+
     /// 生成 key 排序后的单行 JSON。
     ///
     /// - Parameter json: 输入 JSON 文本。

@@ -23,6 +23,8 @@ final class WorkspaceViewModel {
     private(set) var tabs: [EditorViewModel] = []
     var activeTabIndex: Int = -1
     var recentFiles: [URL] = []
+    var diffViewModel: DiffViewModel?
+    var isDiffPresented = false
     private var isRestoringSession = true
     /// 下一个未命名标签页使用的序号（本次运行内单调递增）。
     private var nextUntitledNumber = 1
@@ -79,10 +81,10 @@ final class WorkspaceViewModel {
     private func presentCloseConfirmation(for tab: EditorViewModel, at index: Int) {
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "关闭“\(tab.documentTitle)”？"
-        alert.informativeText = "该标签页包含符合 JSON 格式且尚未保存的内容，关闭后将丢失。"
-        alert.addButton(withTitle: "关闭")
-        alert.addButton(withTitle: "取消")
+        alert.messageText = "Close \"\(tab.documentTitle)\"?"
+        alert.informativeText = "This tab has unsaved valid JSON. Closing will discard those changes."
+        alert.addButton(withTitle: "Close")
+        alert.addButton(withTitle: "Cancel")
 
         if let window = NSApp.keyWindow {
             alert.beginSheetModal(for: window) { response in
@@ -192,11 +194,11 @@ final class WorkspaceViewModel {
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = targetCount == 1
-            ? "关闭标签页？"
-            : "关闭 \(targetCount) 个标签页？"
-        alert.informativeText = "其中 \(confirmedCount) 个标签页包含符合 JSON 格式且尚未保存的内容，关闭后将丢失。"
-        alert.addButton(withTitle: "关闭")
-        alert.addButton(withTitle: "取消")
+            ? "Close Tab?"
+            : "Close \(targetCount) Tabs?"
+        alert.informativeText = "\(confirmedCount) tab(s) have unsaved valid JSON. Closing will discard those changes."
+        alert.addButton(withTitle: "Close")
+        alert.addButton(withTitle: "Cancel")
 
         if let window = NSApp.keyWindow {
             alert.beginSheetModal(for: window) { response in
@@ -206,6 +208,120 @@ final class WorkspaceViewModel {
         } else {
             guard alert.runModal() == .alertFirstButtonReturn else { return }
             completion()
+        }
+    }
+
+    // MARK: - JSON Diff
+
+    /// 菜单入口：以当前标签页为左侧，右侧待选。
+    func presentDiffFromMenu() {
+        let leftBinding = activeDocument.map { tab in
+            DiffSideBinding(
+                source: .tab(tab.id),
+                label: tab.documentTitle,
+                inlineText: tab.rawText,
+                applyTarget: .tab(tab.id)
+            )
+        } ?? DiffSideBinding(
+            source: .inline,
+            label: "Left",
+            inlineText: "{}",
+            applyTarget: .inlineOnly
+        )
+        let rightBinding = DiffSideBinding(
+            source: .inline,
+            label: "Right",
+            inlineText: "{}",
+            applyTarget: .inlineOnly
+        )
+        let indent = activeDocument?.indent ?? .fourSpaces
+        diffViewModel = DiffViewModel(left: leftBinding, right: rightBinding, indent: indent)
+        isDiffPresented = true
+    }
+
+    /// 标签页右键：聚焦页 = 左，被右键页 = 右。
+    func presentDiff(focusedTabIndex: Int, otherTabIndex: Int) {
+        guard tabs.indices.contains(focusedTabIndex),
+              tabs.indices.contains(otherTabIndex),
+              focusedTabIndex != otherTabIndex else { return }
+        let leftTab = tabs[focusedTabIndex]
+        let rightTab = tabs[otherTabIndex]
+        diffViewModel = DiffViewModel(
+            left: DiffSideBinding(
+                source: .tab(leftTab.id),
+                label: leftTab.documentTitle,
+                inlineText: leftTab.rawText,
+                applyTarget: .tab(leftTab.id)
+            ),
+            right: DiffSideBinding(
+                source: .tab(rightTab.id),
+                label: rightTab.documentTitle,
+                inlineText: rightTab.rawText,
+                applyTarget: .tab(rightTab.id)
+            ),
+            indent: leftTab.indent
+        )
+        isDiffPresented = true
+    }
+
+    /// 请求关闭 Diff；存在未保存的文件侧改动时弹出确认。
+    func requestDismissDiff() {
+        guard isDiffPresented else { return }
+        guard let diff = diffViewModel, diff.hasDirtyFileTargets else {
+            dismissDiff()
+            return
+        }
+        presentDiffDismissConfirmation()
+    }
+
+    func dismissDiff() {
+        isDiffPresented = false
+        diffViewModel = nil
+    }
+
+    private func presentDiffDismissConfirmation() {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Unsaved file changes"
+        alert.informativeText = "Choose whether to write applied file-side changes to disk before closing."
+        alert.addButton(withTitle: "Save and Close")
+        alert.addButton(withTitle: "Discard and Close")
+        alert.addButton(withTitle: "Cancel")
+
+        let finishSaveAndClose = {
+            do {
+                try self.diffViewModel?.saveDirtyFileTargets(workspace: self)
+                self.dismissDiff()
+            } catch {
+                self.diffViewModel?.reportError(error)
+            }
+        }
+
+        let finishDiscardAndClose = {
+            self.diffViewModel?.revertDirtyFileTargetsToSavedSnapshot(workspace: self)
+            self.dismissDiff()
+        }
+
+        if let window = NSApp.keyWindow {
+            alert.beginSheetModal(for: window) { response in
+                switch response {
+                case .alertFirstButtonReturn:
+                    finishSaveAndClose()
+                case .alertSecondButtonReturn:
+                    finishDiscardAndClose()
+                default:
+                    break
+                }
+            }
+        } else {
+            switch alert.runModal() {
+            case .alertFirstButtonReturn:
+                finishSaveAndClose()
+            case .alertSecondButtonReturn:
+                finishDiscardAndClose()
+            default:
+                break
+            }
         }
     }
 
@@ -240,14 +356,25 @@ final class WorkspaceViewModel {
     }
 
     func saveActiveDocument() {
-        guard let doc = activeDocument else { return }
-        if let url = doc.fileURL {
+        if let diff = diffViewModel, diff.hasDirtyFileTargets {
             do {
-                try doc.save(to: url)
-                persistSession()
+                try diff.saveDirtyFileTargets(workspace: self)
             } catch {
-                doc.reportFileError(error)
+                if let doc = activeDocument {
+                    doc.reportFileError(error)
+                } else {
+                    diff.reportError(error)
+                }
+                return
             }
+        }
+
+        guard let doc = activeDocument, doc.isModified, let url = doc.fileURL else { return }
+        do {
+            try doc.save(to: url)
+            persistSession()
+        } catch {
+            doc.reportFileError(error)
         }
     }
 

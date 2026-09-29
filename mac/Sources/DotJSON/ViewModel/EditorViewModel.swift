@@ -15,10 +15,10 @@ final class EditorViewModel: Identifiable {
         var errorDescription: String? {
             switch self {
             case .nonFileURL:
-                return "只能打开本地 JSON 文件。"
+                return "Only local JSON files can be opened."
             case .unsupportedFileExtension(let fileExtension):
-                let displayedExtension = fileExtension.isEmpty ? "无扩展名" : ".\(fileExtension)"
-                return "不支持 \(displayedExtension) 文件，MVP 仅支持 .json。"
+                let displayedExtension = fileExtension.isEmpty ? "no extension" : ".\(fileExtension)"
+                return "Unsupported \(displayedExtension) file. MVP supports .json only."
             }
         }
     }
@@ -267,6 +267,16 @@ final class EditorViewModel: Identifiable {
     func reportFileError(_ error: any Error) {
         errorMessage = error.localizedDescription
         errorLineNumber = 0
+    }
+
+    /// 由 Diff 等外部流程写入内容并标记为未保存。
+    func applyExternalContent(_ text: String) {
+        rawText = text
+    }
+
+    /// Diff 或外部流程已把 `rawText` 写入磁盘后，对齐保存基线。
+    func acknowledgePersistedToDisk() {
+        savedText = rawText
     }
 
     // MARK: - Private

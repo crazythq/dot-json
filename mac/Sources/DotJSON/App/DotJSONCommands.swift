@@ -6,29 +6,32 @@ struct DotJSONCommands: Commands {
     private var workspace: WorkspaceViewModel? { WorkspaceViewModel.shared }
 
     var body: some Commands {
-        CommandGroup(after: .newItem) {
-            Button("新建") { workspace?.newTab() }
+        // Replace defaults so File menu stays English-only (no mixed CN leftovers).
+        CommandGroup(replacing: .newItem) {
+            Button("New") { workspace?.newTab() }
                 .keyboardShortcut("n", modifiers: .command)
 
-            Button("Open...") { openFile() }
+            Button("Open…") { openFile() }
                 .keyboardShortcut("o", modifiers: .command)
 
             Divider()
 
-            Button("关闭标签页") { workspace?.closeActiveTab() }
+            Button("Close Tab") { workspace?.closeActiveTab() }
                 .keyboardShortcut("w", modifiers: .command)
+
+            Divider()
+
+            Button("File Compare") {
+                workspace?.presentDiffFromMenu()
+            }
         }
 
-        CommandGroup(after: .saveItem) {
+        CommandGroup(replacing: .saveItem) {
             Button("Save") { workspace?.saveActiveDocument() }
                 .keyboardShortcut("s", modifiers: .command)
 
-            Button("Save As...") { workspace?.saveActiveDocumentAs() }
+            Button("Save As…") { workspace?.saveActiveDocumentAs() }
                 .keyboardShortcut("s", modifiers: [.command, .shift])
-        }
-
-        CommandGroup(after: .saveItem) {
-            Divider()
 
             if let recent = workspace?.recentFiles, !recent.isEmpty {
                 Menu("Open Recent") {
