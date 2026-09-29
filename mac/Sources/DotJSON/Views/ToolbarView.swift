@@ -51,14 +51,7 @@ struct ToolbarView: ToolbarContent {
             .help("Minify JSON")
 
             if let doc = workspace.activeDocument {
-                Picker("Indent", selection: Bindable(doc).indent) {
-                    ForEach(JSONFormatter.Indent.allCases, id: \.self) { o in
-                        Text(o.label).tag(o)
-                    }
-                }
-                .pickerStyle(.menu)
-                .frame(width: 100)
-                .help("Indent: 2 spaces / 4 spaces / Tab")
+                indentMenu(for: doc)
             }
         }
 
