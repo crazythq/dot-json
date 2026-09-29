@@ -144,6 +144,27 @@ final class WorkspaceViewModel {
         persistSession()
     }
 
+    /// Reorder tabs; active selection follows the same `EditorViewModel` instance (tab id), not index.
+    ///
+    /// `insertionIndex` is “insert before this index” in the pre-move array (0…`tabs.count`).
+    func moveTab(from sourceIndex: Int, to insertionIndex: Int) {
+        guard tabs.indices.contains(sourceIndex) else { return }
+        guard insertionIndex >= 0, insertionIndex <= tabs.count else { return }
+
+        var destination = insertionIndex
+        if destination > sourceIndex { destination -= 1 }
+        guard destination != sourceIndex else { return }
+
+        let activeId = tabs.indices.contains(activeTabIndex) ? tabs[activeTabIndex].id : nil
+        let tab = tabs.remove(at: sourceIndex)
+        tabs.insert(tab, at: destination)
+
+        if let activeId, let restored = tabs.firstIndex(where: { $0.id == activeId }) {
+            activeTabIndex = restored
+        }
+        persistSession()
+    }
+
     /// 重命名指定标签页的显示标题。
     func renameTab(at index: Int, to title: String) {
         guard tabs.indices.contains(index) else { return }
