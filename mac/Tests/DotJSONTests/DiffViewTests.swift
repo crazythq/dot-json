@@ -31,8 +31,12 @@ struct DiffViewTests {
         #expect(source.contains("workspace.rejectDiffMultiFileDrop()"))
         #expect(source.contains("workspace.openFileOnDiffSide(url, position: position)"))
         #expect(source.contains("DiffSideTextEditor(text: sideTextBinding(position))"))
-        // SwiftUI TextEditor inserts dropped file paths as text; Diff uses AppKit DiffPaneTextView instead.
-        #expect(!source.contains("TextEditor(text:"))
+        // SwiftUI TextEditor (not DiffSideTextEditor) must not be used — it pastes dropped paths as text.
+        let withoutDiffSideEditor = source.replacingOccurrences(
+            of: "DiffSideTextEditor(text:",
+            with: ""
+        )
+        #expect(!withoutDiffSideEditor.contains("TextEditor(text:"))
     }
 
     @Test func diffPaneTextViewRejectsFileURLDragPaste() throws {
