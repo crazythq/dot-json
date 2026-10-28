@@ -42,6 +42,15 @@ struct PriorHandlerStore {
         defaults.removeObject(forKey: Key.jsonl)
     }
 
+    func clear(for ext: ManagedJSONExtension) {
+        switch ext {
+        case .json:
+            defaults.removeObject(forKey: Key.json)
+        case .jsonl:
+            defaults.removeObject(forKey: Key.jsonl)
+        }
+    }
+
     private func url(forKey key: String) -> URL? {
         guard let path = defaults.string(forKey: key), !path.isEmpty else { return nil }
         return URL(fileURLWithPath: path)

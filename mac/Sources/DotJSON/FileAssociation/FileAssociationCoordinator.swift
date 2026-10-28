@@ -1,6 +1,6 @@
 import Foundation
 
-/// Orchestrates enable / disable / reset using pure decisions + workspace I/O.
+/// Orchestrates per-extension default-handler changes.
 @MainActor
 final class FileAssociationCoordinator {
     private let workspace: any DefaultApplicationWorkspace
@@ -30,60 +30,51 @@ final class FileAssociationCoordinator {
         )
     }
 
+    func isDotJSONDefault(for ext: ManagedJSONExtension) -> Bool {
+        FileAssociationLogic.isSelfDefault(
+            defaultApp: workspace.defaultApplicationURL(for: ext),
+            selfAppURL: selfAppURL
+        )
+    }
+
     enum EnableOutcome: Equatable {
         case success
-        /// User declined a macOS Finder confirmation sheet (not an app error).
         case userCancelled
         case failure(partialRollbackFailed: Bool)
     }
 
-    func enableDotJSONAsDefault() async -> EnableOutcome {
-        let state = refreshToggleState()
-        let jsonDefault = workspace.defaultApplicationURL(for: .json)
-        let jsonlDefault = workspace.defaultApplicationURL(for: .jsonl)
-
-        if FileAssociationLogic.shouldPersistPriorWhenEnabling(state: state) {
-            let prior = FileAssociationLogic.priorToPersistWhenEnabling(
-                jsonDefault: jsonDefault,
-                jsonlDefault: jsonlDefault,
-                selfAppURL: selfAppURL
-            )
-            priorStore.merge(prior)
-        }
-
-        let prior = priorStore.load()
-        let alreadySelf = FileAssociationLogic.extensionsAlreadySelf(
-            jsonDefault: jsonDefault,
-            jsonlDefault: jsonlDefault,
-            selfAppURL: selfAppURL
-        )
-        let extensionsToSet = FileAssociationLogic.enableOrder.filter { !alreadySelf.contains($0) }
-        if extensionsToSet.isEmpty {
+    func enableDotJSONAsDefault(for ext: ManagedJSONExtension) async -> EnableOutcome {
+        let currentDefault = workspace.defaultApplicationURL(for: ext)
+        if FileAssociationLogic.isSelfDefault(defaultApp: currentDefault, selfAppURL: selfAppURL) {
             return .success
         }
 
-        // macOS shows one Finder confirmation per UTI (`setDefaultApplication`); .json and .jsonl are
-        // separate types, so a full enable from non-DotJSON defaults is two system sheets — not suppressible.
-        var changedToSelf: [ManagedJSONExtension] = []
+        var snapshot = PriorHandlerSnapshot()
+        snapshot.set(currentDefault, for: ext)
+        priorStore.merge(snapshot)
 
-        for ext in extensionsToSet {
-            do {
-                try await workspace.setDefaultApplication(at: selfAppURL, for: ext)
-            } catch {
-                return await finishEnableAfterSetError(
-                    error: error,
-                    failingExtension: ext,
-                    changedToSelf: changedToSelf,
-                    prior: prior
-                )
+        let prior = priorStore.load()
+        do {
+            try await workspace.setDefaultApplication(at: selfAppURL, for: ext)
+        } catch {
+            var changedToSelf: [ManagedJSONExtension] = []
+            if FileAssociationLogic.isSelfDefault(
+                defaultApp: workspace.defaultApplicationURL(for: ext),
+                selfAppURL: selfAppURL
+            ) {
+                changedToSelf = [ext]
             }
+            return await finishEnableAfterSetError(
+                error: error,
+                failingExtension: ext,
+                changedToSelf: changedToSelf,
+                prior: prior
+            )
+        }
 
-            let defaultNow = workspace.defaultApplicationURL(for: ext)
-            if !FileAssociationLogic.isSelfDefault(defaultApp: defaultNow, selfAppURL: selfAppURL) {
-                _ = await rollbackChangedToSelf(changedToSelf: changedToSelf, prior: prior)
-                return .userCancelled
-            }
-            changedToSelf.append(ext)
+        let defaultNow = workspace.defaultApplicationURL(for: ext)
+        if !FileAssociationLogic.isSelfDefault(defaultApp: defaultNow, selfAppURL: selfAppURL) {
+            return .userCancelled
         }
         return .success
     }
@@ -137,48 +128,34 @@ final class FileAssociationCoordinator {
 
     enum DisableOutcome: Equatable {
         case success
-        case partialRestore(extensionsStillDotJSON: [ManagedJSONExtension])
         case restoreFailed
     }
 
-    func disableDotJSONAsDefault() async -> DisableOutcome {
+    func disableDotJSONAsDefault(for ext: ManagedJSONExtension) async -> DisableOutcome {
         let prior = priorStore.load()
-
-        for ext in ManagedJSONExtension.allCases {
-            let action = FileAssociationLogic.restoreAction(
-                for: ext,
-                prior: prior,
-                priorAppExists: { url in
-                    fileManager.fileExists(atPath: url.path)
-                }
-            )
-            switch action {
-            case .restorePrior(let url):
-                do {
-                    try await workspace.setDefaultApplication(at: url, for: ext)
-                } catch {
-                    break
-                }
-            case .resetToSystemFallback:
+        let action = FileAssociationLogic.restoreAction(
+            for: ext,
+            prior: prior,
+            priorAppExists: { url in
+                fileManager.fileExists(atPath: url.path)
+            }
+        )
+        switch action {
+        case .restorePrior(let url):
+            do {
+                try await workspace.setDefaultApplication(at: url, for: ext)
+            } catch {
                 break
             }
+        case .resetToSystemFallback:
+            break
         }
 
-        let jsonDefault = workspace.defaultApplicationURL(for: .json)
-        let jsonlDefault = workspace.defaultApplicationURL(for: .jsonl)
-        let stillDotJSON = FileAssociationLogic.extensionsStillUsingSelf(
-            jsonDefault: jsonDefault,
-            jsonlDefault: jsonlDefault,
-            selfAppURL: selfAppURL
-        )
-
-        if stillDotJSON.isEmpty {
-            return .success
-        }
-        if stillDotJSON.count == ManagedJSONExtension.allCases.count {
+        if isDotJSONDefault(for: ext) {
             return .restoreFailed
         }
-        return .partialRestore(extensionsStillDotJSON: stillDotJSON)
+        priorStore.clear(for: ext)
+        return .success
     }
 
     enum ResetOutcome: Equatable {
@@ -186,38 +163,28 @@ final class FileAssociationCoordinator {
         case failure
     }
 
-    func resetToMacOSDefaults() async -> ResetOutcome {
-        let jsonDefault = workspace.defaultApplicationURL(for: .json)
-        let jsonlDefault = workspace.defaultApplicationURL(for: .jsonl)
-        let targets = FileAssociationLogic.extensionsStillUsingSelf(
-            jsonDefault: jsonDefault,
-            jsonlDefault: jsonlDefault,
-            selfAppURL: selfAppURL
-        )
-        guard !targets.isEmpty else {
+    func resetToMacOSDefault(for ext: ManagedJSONExtension) async -> ResetOutcome {
+        guard isDotJSONDefault(for: ext) else {
             return .success
         }
 
-        var anyFailure = false
-        for ext in targets {
-            let candidate = workspace.workspaceCandidate(for: ext)
-            guard let fallback = FileAssociationLogic.systemFallbackApp(
-                for: ext,
-                workspaceCandidate: candidate,
-                selfAppURL: selfAppURL
-            ) else {
-                anyFailure = true
-                continue
-            }
-            do {
-                try await workspace.setDefaultApplication(at: fallback, for: ext)
-            } catch {
-                anyFailure = true
-            }
+        let candidate = workspace.workspaceCandidate(for: ext)
+        guard let fallback = FileAssociationLogic.systemFallbackApp(
+            for: ext,
+            workspaceCandidate: candidate,
+            selfAppURL: selfAppURL
+        ) else {
+            return .failure
         }
-        if !anyFailure {
-            priorStore.clear()
+        do {
+            try await workspace.setDefaultApplication(at: fallback, for: ext)
+        } catch {
+            return .failure
         }
-        return anyFailure ? .failure : .success
+        if isDotJSONDefault(for: ext) {
+            return .failure
+        }
+        priorStore.clear(for: ext)
+        return .success
     }
 }

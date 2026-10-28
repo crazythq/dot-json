@@ -25,7 +25,9 @@ struct FileAssociationSettingsTests {
         #expect(appSource.contains("Settings {"))
         #expect(appSource.contains("SettingsView()"))
         #expect(settingsSource.contains("Section(\"Files\")"))
-        #expect(settingsSource.contains("Open JSON files with DotJSON"))
+        #expect(settingsSource.contains("Open .json files with DotJSON"))
+        #expect(settingsSource.contains("Open .jsonl files with DotJSON"))
+        #expect(!settingsSource.contains("Open JSON files with DotJSON"))
         #expect(!settingsSource.contains("Section(\"General\")"))
         #expect(!settingsSource.contains("Section(\"Editor\")"))
     }

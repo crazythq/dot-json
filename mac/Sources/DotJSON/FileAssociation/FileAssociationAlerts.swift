@@ -11,10 +11,11 @@ enum FileAssociationAlerts {
     4. Click “Change All…” to apply to all files of that type.
     """
 
-    static func showEnableFailure(partialRollbackFailed: Bool) {
-        var message = "DotJSON could not be set as the default app for JSON files."
+    static func showEnableFailure(for ext: ManagedJSONExtension, partialRollbackFailed: Bool) {
+        var message =
+            "DotJSON could not be set as the default app for .\(ext.rawValue) files."
         if partialRollbackFailed {
-            message += " A partial change may remain; please fix both .json and .jsonl in Finder."
+            message += " A partial change may remain; please fix .\(ext.rawValue) in Finder."
         }
         message += "\n\n\(getInfoSteps)"
         presentAlert(
@@ -30,45 +31,23 @@ enum FileAssociationAlerts {
         }
     }
 
-    static func showDisablePartialRestore(
-        extensionsStillDotJSON: [ManagedJSONExtension],
+    static func showDisableFailure(
+        for ext: ManagedJSONExtension,
+        offerReset: Bool,
         onReset: @escaping () -> Void
     ) {
-        let types = extensionsStillDotJSON.map { ".\($0.rawValue)" }.joined(separator: " and ")
-        var message =
-            "Some file types were restored, but \(types) still open in DotJSON."
-        message += "\n\n\(getInfoSteps)"
-        presentAlert(
-            title: "Restore Incomplete",
-            message: message,
-            informativeText:
-                "Reset to macOS Default will only change file types still set to DotJSON.",
-            buttons: ["OK", "Reset to macOS Default", "Open System Settings…"],
-            defaultButtonIndex: 0
-        ) { response in
-            switch response {
-            case .alertSecondButtonReturn:
-                onReset()
-            case .alertThirdButtonReturn:
-                openSystemSettingsIfPossible()
-            default:
-                break
-            }
-        }
-    }
-
-    static func showDisableFailure(offerReset: Bool, onReset: @escaping () -> Void) {
         var buttons = ["OK", "Open System Settings…"]
         if offerReset {
             buttons.insert("Reset to macOS Default", at: 0)
         }
-        var message = "DotJSON could not restore your previous default apps."
+        var message =
+            "DotJSON could not restore the previous default app for .\(ext.rawValue) files."
         message += "\n\n\(getInfoSteps)"
         presentAlert(
             title: "Restore Failed",
             message: message,
             informativeText: offerReset
-                ? "You can reset to a typical macOS default (such as TextEdit) or change defaults manually."
+                ? "Reset to macOS Default will only change .\(ext.rawValue) files still set to DotJSON."
                 : nil,
             buttons: buttons,
             defaultButtonIndex: 0
@@ -88,14 +67,10 @@ enum FileAssociationAlerts {
         }
     }
 
-    static func showResetSuccess(resetExtensions: [ManagedJSONExtension]) {
-        let types = resetExtensions.map { ".\($0.rawValue)" }.joined(separator: " and ")
-        let message = types.isEmpty
-            ? "macOS default apps were updated where needed."
-            : "macOS default apps were applied for \(types)."
+    static func showResetSuccess(for ext: ManagedJSONExtension) {
         presentAlert(
             title: "Defaults Reset",
-            message: message,
+            message: "macOS default apps were applied for .\(ext.rawValue) files.",
             informativeText: nil,
             buttons: ["OK"],
             defaultButtonIndex: 0,
@@ -103,8 +78,8 @@ enum FileAssociationAlerts {
         )
     }
 
-    static func showResetFailure() {
-        var message = "Could not reset default apps automatically."
+    static func showResetFailure(for ext: ManagedJSONExtension) {
+        var message = "Could not reset the default app for .\(ext.rawValue) files automatically."
         message += "\n\n\(getInfoSteps)"
         presentAlert(
             title: "Reset Failed",
@@ -119,12 +94,17 @@ enum FileAssociationAlerts {
         }
     }
 
-    static func confirmDisable(onConfirm: @escaping () -> Void, onCancel: (() -> Void)? = nil) {
+    static func confirmDisable(
+        for ext: ManagedJSONExtension,
+        onConfirm: @escaping () -> Void,
+        onCancel: (() -> Void)? = nil
+    ) {
         presentAlert(
-            title: "Stop Opening JSON with DotJSON?",
-            message: "This will restore the apps that opened .json and .jsonl before you turned this on.",
+            title: "Stop opening .\(ext.rawValue) with DotJSON?",
+            message:
+                "This will restore the app that opened .\(ext.rawValue) files before you turned this on.",
             informativeText: nil,
-            buttons: ["Cancel", "Restore Previous Apps"],
+            buttons: ["Cancel", "Restore Previous App"],
             defaultButtonIndex: 1
         ) { response in
             if response == .alertSecondButtonReturn {
@@ -135,7 +115,6 @@ enum FileAssociationAlerts {
         }
     }
 
-    /// Attempts Desktop & Dock → Default web browser area; no reliable per-extension pane on macOS 14.
     static func openSystemSettingsIfPossible() {
         let candidates = [
             "x-apple.systempreferences:com.apple.Default-Apps-Settings.extension",

@@ -2,112 +2,108 @@ import SwiftUI
 
 struct SettingsView: View {
     @State private var coordinator = FileAssociationCoordinator()
-    @State private var openJSONWithDotJSON = false
-    @State private var isBusy = false
+    @State private var openJSON = false
+    @State private var openJSONL = false
+    @State private var busyExtensions: Set<ManagedJSONExtension> = []
 
     var body: some View {
         Form {
             Section("Files") {
-                Toggle(isOn: binding) {
-                    Text("Open JSON files with DotJSON")
+                Toggle(isOn: binding(for: .json)) {
+                    Text("Open .json files with DotJSON")
                 }
-                .disabled(isBusy)
+                .disabled(busyExtensions.contains(.json))
+
+                Toggle(isOn: binding(for: .jsonl)) {
+                    Text("Open .jsonl files with DotJSON")
+                }
+                .disabled(busyExtensions.contains(.jsonl))
             }
         }
         .formStyle(.grouped)
-        .frame(width: 420, height: 120)
+        .frame(width: 420, height: 150)
         .onAppear {
-            syncToggleFromSystem()
+            syncTogglesFromSystem()
         }
     }
 
-    private var binding: Binding<Bool> {
+    private func binding(for ext: ManagedJSONExtension) -> Binding<Bool> {
         Binding(
-            get: { openJSONWithDotJSON },
+            get: { ext == .json ? openJSON : openJSONL },
             set: { newValue in
                 if newValue {
-                    turnOn()
+                    turnOn(ext)
                 } else {
-                    turnOff()
+                    turnOff(ext)
                 }
             }
         )
     }
 
-    private func syncToggleFromSystem() {
-        openJSONWithDotJSON = coordinator.refreshToggleState().isFullyOn
+    private func syncTogglesFromSystem() {
+        openJSON = coordinator.isDotJSONDefault(for: .json)
+        openJSONL = coordinator.isDotJSONDefault(for: .jsonl)
     }
 
-    private func turnOn() {
-        if coordinator.refreshToggleState().isFullyOn {
-            syncToggleFromSystem()
+    private func syncToggle(for ext: ManagedJSONExtension) {
+        switch ext {
+        case .json:
+            openJSON = coordinator.isDotJSONDefault(for: .json)
+        case .jsonl:
+            openJSONL = coordinator.isDotJSONDefault(for: .jsonl)
+        }
+    }
+
+    private func turnOn(_ ext: ManagedJSONExtension) {
+        if coordinator.isDotJSONDefault(for: ext) {
+            syncToggle(for: ext)
             return
         }
-        guard !isBusy else { return }
-        isBusy = true
+        guard !busyExtensions.contains(ext) else { return }
+        busyExtensions.insert(ext)
         Task {
-            let outcome = await coordinator.enableDotJSONAsDefault()
-            syncToggleFromSystem()
-            isBusy = false
+            let outcome = await coordinator.enableDotJSONAsDefault(for: ext)
+            syncToggle(for: ext)
+            busyExtensions.remove(ext)
             if case .failure(let rollbackFailed) = outcome {
-                FileAssociationAlerts.showEnableFailure(partialRollbackFailed: rollbackFailed)
+                FileAssociationAlerts.showEnableFailure(for: ext, partialRollbackFailed: rollbackFailed)
             }
-            // `.userCancelled`: user kept prior app in Finder — sync toggle only, no alert.
         }
     }
 
-    private func turnOff() {
+    private func turnOff(_ ext: ManagedJSONExtension) {
         FileAssociationAlerts.confirmDisable(
+            for: ext,
             onConfirm: {
-                isBusy = true
+                busyExtensions.insert(ext)
                 Task {
-                    let outcome = await coordinator.disableDotJSONAsDefault()
-                    syncToggleFromSystem()
-                    isBusy = false
-                    switch outcome {
-                    case .success:
-                        break
-                    case .partialRestore(let stillDotJSON):
-                        FileAssociationAlerts.showDisablePartialRestore(
-                            extensionsStillDotJSON: stillDotJSON
-                        ) {
-                            runReset()
-                        }
-                    case .restoreFailed:
-                        FileAssociationAlerts.showDisableFailure(offerReset: true) {
-                            runReset()
+                    let outcome = await coordinator.disableDotJSONAsDefault(for: ext)
+                    syncToggle(for: ext)
+                    busyExtensions.remove(ext)
+                    if case .restoreFailed = outcome {
+                        FileAssociationAlerts.showDisableFailure(for: ext, offerReset: true) {
+                            runReset(for: ext)
                         }
                     }
                 }
             },
             onCancel: {
-                syncToggleFromSystem()
+                syncToggle(for: ext)
             }
         )
     }
 
-    private func runReset() {
-        let targetsBefore = extensionsStillOnDotJSON()
-        isBusy = true
+    private func runReset(for ext: ManagedJSONExtension) {
+        busyExtensions.insert(ext)
         Task {
-            let outcome = await coordinator.resetToMacOSDefaults()
-            syncToggleFromSystem()
-            isBusy = false
+            let outcome = await coordinator.resetToMacOSDefault(for: ext)
+            syncToggle(for: ext)
+            busyExtensions.remove(ext)
             switch outcome {
             case .success:
-                FileAssociationAlerts.showResetSuccess(resetExtensions: targetsBefore)
+                FileAssociationAlerts.showResetSuccess(for: ext)
             case .failure:
-                FileAssociationAlerts.showResetFailure()
-            }
-        }
-    }
-
-    private func extensionsStillOnDotJSON() -> [ManagedJSONExtension] {
-        let json = coordinator.refreshToggleState()
-        return ManagedJSONExtension.allCases.filter { ext in
-            switch ext {
-            case .json: json.isDotJSONDefaultForJSON
-            case .jsonl: json.isDotJSONDefaultForJSONL
+                FileAssociationAlerts.showResetFailure(for: ext)
             }
         }
     }
