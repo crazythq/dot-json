@@ -43,7 +43,11 @@ chmod +x "$APP_DIR/Contents/MacOS/DotJSON"
 cp "$ICNS" "$APP_DIR/Contents/Resources/AppIcon.icns"
 if [[ -d "$BUNDLE" ]]; then
     cp -R "$BUNDLE" "$APP_DIR/Contents/Resources/"
+else
+    echo "error: missing SwiftPM resource bundle at $BUNDLE" >&2
+    exit 1
 fi
+test -d "$APP_DIR/Contents/Resources/DotJSON_DotJSON.bundle"
 cp "$INFO_PLIST" "$APP_DIR/Contents/Info.plist"
 
 # 本地 ad-hoc 签名保证 Finder 可以稳定启动手工组装的 app bundle。

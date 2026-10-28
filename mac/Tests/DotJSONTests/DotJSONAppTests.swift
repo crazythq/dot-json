@@ -73,15 +73,15 @@ struct DotJSONAppTests {
         #expect(plist.contains("<false/>"))
     }
 
-    /// 验证打包应用优先从主 Bundle 读取已经复制到 Resources 的图标。
-    ///
-    /// SwiftPM 的 `Bundle.module` 会在启动期重新遍历资源 Bundle；打包后的主 Bundle
-    /// 已经包含图标，直接读取可以避免文件系统异常时阻塞整个应用初始化。
-    @Test func packagedAppLoadsIconFromMainBundleBeforeSwiftPackageBundle() throws {
+    /// 验证打包应用优先从主 Bundle 读取已经复制到 Resources 的图标，再回退到资源包解析器。
+    @Test func packagedAppLoadsIconFromMainBundleBeforeResourceBundleFallback() throws {
         let source = try appSource()
 
         let mainBundleLookup = try #require(source.range(of: "Bundle.main.url(forResource:"))
-        let moduleBundleLookup = try #require(source.range(of: "Bundle.module.url(forResource:"))
-        #expect(mainBundleLookup.lowerBound < moduleBundleLookup.lowerBound)
+        let resourceBundleLookup = try #require(
+            source.range(of: "DotJSONResourceBundle.bundle.url(forResource:")
+        )
+        #expect(mainBundleLookup.lowerBound < resourceBundleLookup.lowerBound)
+        #expect(!source.contains("Bundle.module"))
     }
 }
