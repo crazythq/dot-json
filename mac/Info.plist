@@ -34,6 +34,81 @@
                 <string>public.json</string>
             </array>
         </dict>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>JSON Lines Document</string>
+            <key>CFBundleTypeExtensions</key>
+            <array>
+                <string>jsonl</string>
+            </array>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>LSHandlerRank</key>
+            <string>Default</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>sh.crazy.dotjson.jsonl</string>
+            </array>
+        </dict>
+    </array>
+    <key>UTExportedTypeDeclarations</key>
+    <array>
+        <dict>
+            <key>UTTypeConformsTo</key>
+            <array>
+                <string>public.json</string>
+                <string>public.plain-text</string>
+            </array>
+            <key>UTTypeDescription</key>
+            <string>JSON Lines</string>
+            <key>UTTypeIdentifier</key>
+            <string>sh.crazy.dotjson.jsonl</string>
+            <key>UTTypeTagSpecification</key>
+            <dict>
+                <key>public.filename-extension</key>
+                <array>
+                    <string>jsonl</string>
+                </array>
+            </dict>
+        </dict>
+    </array>
+    <key>UTImportedTypeDeclarations</key>
+    <array>
+        <dict>
+            <key>UTTypeConformsTo</key>
+            <array>
+                <string>public.json</string>
+                <string>public.plain-text</string>
+            </array>
+            <key>UTTypeDescription</key>
+            <string>JSON Lines (jsonlines.org)</string>
+            <key>UTTypeIdentifier</key>
+            <string>org.jsonlines.jsonl</string>
+            <key>UTTypeTagSpecification</key>
+            <dict>
+                <key>public.filename-extension</key>
+                <array>
+                    <string>jsonl</string>
+                </array>
+            </dict>
+        </dict>
+        <dict>
+            <key>UTTypeConformsTo</key>
+            <array>
+                <string>public.plain-text</string>
+            </array>
+            <key>UTTypeDescription</key>
+            <string>JSON Lines</string>
+            <key>UTTypeIdentifier</key>
+            <string>public.jsonl</string>
+            <key>UTTypeTagSpecification</key>
+            <dict>
+                <key>public.filename-extension</key>
+                <array>
+                    <string>jsonl</string>
+                </array>
+            </dict>
+        </dict>
     </array>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>

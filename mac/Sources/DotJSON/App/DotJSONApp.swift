@@ -34,6 +34,9 @@ struct DotJSONApp: App {
         .commands {
             DotJSONCommands()
         }
+        Settings {
+            SettingsView()
+        }
         .onChange(of: NSApplication.shared.keyWindow?.isKeyWindow ?? false) { _, isKey in
             if !isKey {
                 workspace.persistSession()
