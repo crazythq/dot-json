@@ -39,6 +39,11 @@ struct SettingsView: View {
     }
 
     private func turnOn() {
+        if coordinator.refreshToggleState().isFullyOn {
+            syncToggleFromSystem()
+            return
+        }
+        guard !isBusy else { return }
         isBusy = true
         Task {
             let outcome = await coordinator.enableDotJSONAsDefault()

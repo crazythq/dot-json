@@ -44,6 +44,22 @@ struct FileAssociationCoordinatorTests {
         )
     }
 
+    @Test func enableNoOpsWhenAlreadyFullyDefault() async {
+        let workspace = MockDefaultApplicationWorkspace()
+        workspace.defaults[.json] = selfApp
+        workspace.defaults[.jsonl] = selfApp
+        let suite = "FileAssociationCoordinatorTests.noop"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let coordinator = makeCoordinator(
+            workspace: workspace,
+            priorStore: PriorHandlerStore(defaults: defaults)
+        )
+        let outcome = await coordinator.enableDotJSONAsDefault()
+        #expect(outcome == .success)
+        #expect(workspace.setCalls.isEmpty)
+    }
+
     @Test func enableSkipsPriorOverwriteWhenAlreadyDefault() async {
         let workspace = MockDefaultApplicationWorkspace()
         workspace.defaults[.json] = selfApp

@@ -55,12 +55,16 @@ final class FileAssociationCoordinator {
             jsonlDefault: jsonlDefault,
             selfAppURL: selfAppURL
         )
+        let extensionsToSet = FileAssociationLogic.enableOrder.filter { !alreadySelf.contains($0) }
+        if extensionsToSet.isEmpty {
+            return .success
+        }
+
+        // macOS shows one Finder confirmation per UTI (`setDefaultApplication`); .json and .jsonl are
+        // separate types, so a full enable from non-DotJSON defaults is two system sheets — not suppressible.
         var changedToSelf: [ManagedJSONExtension] = []
 
-        for ext in FileAssociationLogic.enableOrder {
-            if alreadySelf.contains(ext) {
-                continue
-            }
+        for ext in extensionsToSet {
             do {
                 try await workspace.setDefaultApplication(at: selfAppURL, for: ext)
                 changedToSelf.append(ext)
