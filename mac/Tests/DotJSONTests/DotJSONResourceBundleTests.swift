@@ -13,12 +13,17 @@ struct DotJSONResourceBundleTests {
         #expect(localized != "toolbar.convert")
     }
 
+    /// `mac/` 包根目录（本文件位于 `Tests/DotJSONTests/`）。
+    private func macPackageRoot() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+    }
+
     /// 应用源码不得再直接引用会在 `.app` 启动时 fatal 的 `Bundle.module`。
     @Test func appSourcesDoNotReferenceSwiftPackageBundleModule() throws {
-        let sourcesRoot = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Sources/DotJSON")
+        let sourcesRoot = macPackageRoot().appendingPathComponent("Sources/DotJSON")
 
         let swiftFiles = try FileManager.default.subpathsOfDirectory(atPath: sourcesRoot.path)
             .filter { $0.hasSuffix(".swift") }
