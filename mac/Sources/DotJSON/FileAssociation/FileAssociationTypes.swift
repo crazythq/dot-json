@@ -180,7 +180,8 @@ enum FileAssociationLogic {
     static func systemFallbackApp(
         for ext: ManagedJSONExtension,
         workspaceCandidate: URL?,
-        selfAppURL: URL
+        selfAppURL: URL,
+        fileManager: FileManager = .default
     ) -> URL? {
         if let workspaceCandidate,
            workspaceCandidate.standardizedFileURL != selfAppURL.standardizedFileURL {
@@ -192,7 +193,7 @@ enum FileAssociationLogic {
         ]
         for path in bundledFallbacks {
             let url = URL(fileURLWithPath: path)
-            if FileManager.default.fileExists(atPath: path),
+            if fileManager.fileExists(atPath: path),
                url.standardizedFileURL != selfAppURL.standardizedFileURL {
                 return url
             }

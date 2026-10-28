@@ -185,19 +185,37 @@ struct FileAssociationCoordinatorTests {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
         let store = PriorHandlerStore(defaults: defaults)
-        store.save(PriorHandlerSnapshot(jsonAppURL: vscode, jsonlAppURL: vscode))
+        store.save(PriorHandlerSnapshot(jsonAppURL: textEdit, jsonlAppURL: vscode))
         let coordinator = makeCoordinator(workspace: workspace, priorStore: store)
 
         let outcome = await coordinator.disableDotJSONAsDefault(for: .json)
         #expect(outcome == .success)
-        #expect(workspace.defaults[.json] == vscode)
+        #expect(workspace.defaults[.json] == textEdit)
         #expect(workspace.defaults[.jsonl] == selfApp)
+    }
+
+    @Test func disableWhenPriorAppMissingUsesSystemFallback() async {
+        let missingPrior = URL(fileURLWithPath: "/Applications/Visual Studio Code.app")
+        let workspace = MockDefaultApplicationWorkspace()
+        workspace.defaults[.json] = selfApp
+        workspace.workspaceCandidateURL = textEdit
+        let suite = "FileAssociationCoordinatorTests.disableMissingPriorApp"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = PriorHandlerStore(defaults: defaults)
+        store.save(PriorHandlerSnapshot(jsonAppURL: missingPrior, jsonlAppURL: nil))
+        let coordinator = makeCoordinator(workspace: workspace, priorStore: store)
+
+        let outcome = await coordinator.disableDotJSONAsDefault(for: .json)
+        #expect(outcome == .success)
+        #expect(workspace.defaults[.json] == textEdit)
     }
 
     @Test func disableMissingPriorReturnsRestoreFailedForExtension() async {
         let workspace = MockDefaultApplicationWorkspace()
         workspace.defaults[.json] = selfApp
         workspace.defaults[.jsonl] = vscode
+        workspace.failSetFor = [.json]
         let coordinator = makeCoordinator(
             workspace: workspace,
             priorStore: PriorHandlerStore(defaults: UserDefaults(suiteName: "FileAssociationCoordinatorTests.noPrior")!)
