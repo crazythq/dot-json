@@ -132,7 +132,7 @@ enum FileAssociationAlerts {
         informativeText: String?,
         buttons: [String],
         defaultButtonIndex: Int,
-        handler: ((NSModalResponse) -> Void)?
+        handler: ((NSApplication.ModalResponse) -> Void)?
     ) {
         let alert = NSAlert()
         alert.messageText = title

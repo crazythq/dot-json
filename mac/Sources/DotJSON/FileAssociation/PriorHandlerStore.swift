@@ -1,7 +1,7 @@
 import Foundation
 
 /// UserDefaults-backed storage for pre-DotJSON default handler app URLs.
-struct PriorHandlerStore: Sendable {
+struct PriorHandlerStore {
     private enum Key {
         static let json = "sh.crazy.dotjson.fileAssociation.prior.json"
         static let jsonl = "sh.crazy.dotjson.fileAssociation.prior.jsonl"
