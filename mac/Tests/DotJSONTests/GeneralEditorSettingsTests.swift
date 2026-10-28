@@ -133,6 +133,7 @@ struct GeneralEditorSettingsTests {
         #expect(ws.tabs.count == tabCount)
     }
 
+    /// Q4: new open applies default indent before load. Changing default indent later must not reformat open tabs.
     @Test func defaultIndentPreferenceDoesNotChangeOpenTabs() throws {
         let defaults = isolatedDefaults()
         let prefs = AppPreferences(defaults: defaults)
@@ -154,10 +155,10 @@ struct GeneralEditorSettingsTests {
             Issue.record("Expected opened tab")
             return
         }
-        #expect(tab.indent == .fourSpaces)
+        #expect(tab.indent == .twoSpaces)
 
         prefs.defaultIndent = .tab
-        #expect(tab.indent == .fourSpaces)
+        #expect(tab.indent == .twoSpaces)
     }
 
     @Test func newTabUsesDefaultIndentFromPreferences() {
