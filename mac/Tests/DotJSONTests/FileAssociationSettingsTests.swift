@@ -3,15 +3,21 @@ import Testing
 
 /// Structural checks for minimal Settings scope (Files toggle only).
 struct FileAssociationSettingsTests {
+    /// `mac/` package root from this test file (`Tests/DotJSONTests/...`).
+    private func macPackageRoot() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+    }
+
+    private func dotJSONSource(_ relativePath: String) -> URL {
+        macPackageRoot().appendingPathComponent("Sources/DotJSON/\(relativePath)")
+    }
+
     @Test func appExposesSettingsSceneWithFilesToggle() throws {
-        let appURL = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Sources/DotJSON/App/DotJSONApp.swift")
-        let settingsURL = appURL
-            .deletingLastPathComponent()
-            .appendingPathComponent("Views/SettingsView.swift")
+        let appURL = dotJSONSource("App/DotJSONApp.swift")
+        let settingsURL = dotJSONSource("Views/SettingsView.swift")
 
         let appSource = try String(contentsOf: appURL, encoding: .utf8)
         let settingsSource = try String(contentsOf: settingsURL, encoding: .utf8)
