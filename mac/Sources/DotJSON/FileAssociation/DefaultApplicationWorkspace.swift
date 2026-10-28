@@ -19,15 +19,27 @@ enum DefaultApplicationWorkspaceError: Error, Equatable {
         if case DefaultApplicationWorkspaceError.userCancelled = error {
             return true
         }
-        let ns = error as NSError
+        return matchesCancellationNSError(error as NSError, visited: [])
+    }
+
+    private static func matchesCancellationNSError(_ ns: NSError, visited: Set<ObjectIdentifier>) -> Bool {
+        let token = ObjectIdentifier(ns)
+        guard !visited.contains(token) else { return false }
+        var nextVisited = visited
+        nextVisited.insert(token)
+
         if ns.domain == NSCocoaErrorDomain, ns.code == NSUserCancelledError {
             return true
         }
         if ns.domain == NSCocoaErrorDomain, ns.code == CocoaError.userCancelled.rawValue {
             return true
         }
-        // userCanceledErr / errAuthorizationCanceled
         if ns.domain == NSOSStatusErrorDomain, ns.code == -128 || ns.code == -60006 {
+            return true
+        }
+
+        if let underlying = ns.userInfo[NSUnderlyingErrorKey] as? NSError,
+           matchesCancellationNSError(underlying, visited: nextVisited) {
             return true
         }
         return false

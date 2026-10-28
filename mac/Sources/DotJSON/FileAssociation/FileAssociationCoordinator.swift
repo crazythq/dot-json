@@ -69,36 +69,70 @@ final class FileAssociationCoordinator {
         for ext in extensionsToSet {
             do {
                 try await workspace.setDefaultApplication(at: selfAppURL, for: ext)
-                changedToSelf.append(ext)
             } catch {
-                var rollbackFailed = false
-                let rollbacks = FileAssociationLogic.rollbackTargetsAfterPartialEnable(
+                return await finishEnableAfterSetError(
+                    error: error,
+                    failingExtension: ext,
                     changedToSelf: changedToSelf,
                     prior: prior
                 )
-                for (rollbackExt, priorURL) in rollbacks {
-                    let candidate = workspace.workspaceCandidate(for: rollbackExt)
-                    guard let target = priorURL ?? FileAssociationLogic.systemFallbackApp(
-                        for: rollbackExt,
-                        workspaceCandidate: candidate,
-                        selfAppURL: selfAppURL
-                    ) else {
-                        rollbackFailed = true
-                        continue
-                    }
-                    do {
-                        try await workspace.setDefaultApplication(at: target, for: rollbackExt)
-                    } catch {
-                        rollbackFailed = true
-                    }
-                }
-                if DefaultApplicationWorkspaceError.isUserCancellation(error) {
-                    return .userCancelled
-                }
-                return .failure(partialRollbackFailed: rollbackFailed)
             }
+
+            let defaultNow = workspace.defaultApplicationURL(for: ext)
+            if !FileAssociationLogic.isSelfDefault(defaultApp: defaultNow, selfAppURL: selfAppURL) {
+                _ = await rollbackChangedToSelf(changedToSelf: changedToSelf, prior: prior)
+                return .userCancelled
+            }
+            changedToSelf.append(ext)
         }
         return .success
+    }
+
+    private func rollbackChangedToSelf(
+        changedToSelf: [ManagedJSONExtension],
+        prior: PriorHandlerSnapshot
+    ) async -> Bool {
+        var rollbackFailed = false
+        let rollbacks = FileAssociationLogic.rollbackTargetsAfterPartialEnable(
+            changedToSelf: changedToSelf,
+            prior: prior
+        )
+        for (rollbackExt, priorURL) in rollbacks {
+            let candidate = workspace.workspaceCandidate(for: rollbackExt)
+            guard let target = priorURL ?? FileAssociationLogic.systemFallbackApp(
+                for: rollbackExt,
+                workspaceCandidate: candidate,
+                selfAppURL: selfAppURL
+            ) else {
+                rollbackFailed = true
+                continue
+            }
+            do {
+                try await workspace.setDefaultApplication(at: target, for: rollbackExt)
+            } catch {
+                rollbackFailed = true
+            }
+        }
+        return rollbackFailed
+    }
+
+    private func finishEnableAfterSetError(
+        error: Error,
+        failingExtension: ManagedJSONExtension,
+        changedToSelf: [ManagedJSONExtension],
+        prior: PriorHandlerSnapshot
+    ) async -> EnableOutcome {
+        let rollbackFailed = await rollbackChangedToSelf(changedToSelf: changedToSelf, prior: prior)
+        let defaultNow = workspace.defaultApplicationURL(for: failingExtension)
+        let classification = FileAssociationLogic.classifyEnableSetFailure(
+            error: error,
+            defaultAppAfterAttempt: defaultNow,
+            selfAppURL: selfAppURL
+        )
+        if classification == .userDeclined {
+            return .userCancelled
+        }
+        return .failure(partialRollbackFailed: rollbackFailed)
     }
 
     enum DisableOutcome: Equatable {

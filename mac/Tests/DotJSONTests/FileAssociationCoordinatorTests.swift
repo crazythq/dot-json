@@ -7,6 +7,8 @@ private final class MockDefaultApplicationWorkspace: DefaultApplicationWorkspace
     var defaults: [ManagedJSONExtension: URL] = [:]
     private(set) var setCalls: [(URL, ManagedJSONExtension)] = []
     var failSetFor: Set<ManagedJSONExtension> = []
+    /// Throws after applying self as default (simulates hard API failure while change stuck).
+    var hardFailSetFor: Set<ManagedJSONExtension> = []
     var userCancelSetFor: Set<ManagedJSONExtension> = []
     var workspaceCandidateURL: URL?
 
@@ -21,6 +23,11 @@ private final class MockDefaultApplicationWorkspace: DefaultApplicationWorkspace
     func setDefaultApplication(at appURL: URL, for ext: ManagedJSONExtension) async throws {
         if userCancelSetFor.contains(ext) {
             throw DefaultApplicationWorkspaceError.userCancelled
+        }
+        if hardFailSetFor.contains(ext) {
+            setCalls.append((appURL, ext))
+            defaults[ext] = appURL
+            throw DefaultApplicationWorkspaceError.setFailed(underlyingDescription: "mock hard failure")
         }
         if failSetFor.contains(ext) {
             throw DefaultApplicationWorkspaceError.setFailed(underlyingDescription: "mock failure")
@@ -98,6 +105,57 @@ struct FileAssociationCoordinatorTests {
         #expect(store.load().jsonlAppURL == vscode)
     }
 
+    @Test func enableDeclineLikeErrorStopsBeforeSecondExtension() async {
+        let workspace = MockDefaultApplicationWorkspace()
+        workspace.defaults[.json] = vscode
+        workspace.defaults[.jsonl] = vscode
+        workspace.failSetFor = [.json]
+        let suite = "FileAssociationCoordinatorTests.declineStop"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let coordinator = makeCoordinator(workspace: workspace, priorStore: PriorHandlerStore(defaults: defaults))
+
+        let outcome = await coordinator.enableDotJSONAsDefault()
+        #expect(outcome == .userCancelled)
+        #expect(workspace.setCalls.count == 1)
+        #expect(workspace.setCalls.first?.1 == .json)
+        #expect(!workspace.setCalls.contains { $0.1 == .jsonl })
+    }
+
+    @Test func enableFirstSucceedSecondDeclineRollsBackFirst() async {
+        let workspace = MockDefaultApplicationWorkspace()
+        workspace.defaults[.json] = vscode
+        workspace.defaults[.jsonl] = vscode
+        workspace.failSetFor = [.jsonl]
+        let suite = "FileAssociationCoordinatorTests.declineSecond"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = PriorHandlerStore(defaults: defaults)
+        store.save(PriorHandlerSnapshot(jsonAppURL: vscode, jsonlAppURL: vscode))
+        let coordinator = makeCoordinator(workspace: workspace, priorStore: store)
+
+        let outcome = await coordinator.enableDotJSONAsDefault()
+        #expect(outcome == .userCancelled)
+        #expect(workspace.defaults[.json] == vscode)
+        #expect(workspace.defaults[.jsonl] == vscode)
+        #expect(workspace.setCalls.contains { $0.0 == vscode && $0.1 == .json })
+    }
+
+    @Test func enableHardFailureWhenDefaultIsSelf() async {
+        let workspace = MockDefaultApplicationWorkspace()
+        workspace.defaults[.json] = vscode
+        workspace.defaults[.jsonl] = vscode
+        workspace.hardFailSetFor = [.json]
+        let suite = "FileAssociationCoordinatorTests.hardFail"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let coordinator = makeCoordinator(workspace: workspace, priorStore: PriorHandlerStore(defaults: defaults))
+
+        let outcome = await coordinator.enableDotJSONAsDefault()
+        #expect(outcome == .failure(partialRollbackFailed: false))
+        #expect(!workspace.setCalls.contains { $0.1 == .jsonl })
+    }
+
     @Test func enableUserDeclinedSystemPromptReturnsCancelled() async {
         let workspace = MockDefaultApplicationWorkspace()
         workspace.defaults[.json] = vscode
@@ -127,7 +185,7 @@ struct FileAssociationCoordinatorTests {
         let coordinator = makeCoordinator(workspace: workspace, priorStore: store)
 
         let outcome = await coordinator.enableDotJSONAsDefault()
-        #expect(outcome == .failure(partialRollbackFailed: false))
+        #expect(outcome == .userCancelled)
         #expect(workspace.defaults[.json] == selfApp)
         #expect(workspace.defaults[.jsonl] == vscode)
         #expect(!workspace.setCalls.contains { $0.1 == .json })
@@ -146,7 +204,7 @@ struct FileAssociationCoordinatorTests {
         let coordinator = makeCoordinator(workspace: workspace, priorStore: store)
 
         let outcome = await coordinator.enableDotJSONAsDefault()
-        #expect(outcome == .failure(partialRollbackFailed: false))
+        #expect(outcome == .userCancelled)
         #expect(workspace.defaults[.json] == vscode)
         #expect(workspace.setCalls.contains { $0.0 == vscode && $0.1 == .json })
     }

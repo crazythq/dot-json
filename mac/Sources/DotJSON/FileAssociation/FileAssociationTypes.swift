@@ -52,6 +52,11 @@ struct FileAssociationToggleState: Equatable, Sendable {
     var isFullyOn: Bool { isDotJSONDefaultForJSON && isDotJSONDefaultForJSONL }
 }
 
+enum EnableSetFailureClassification: Equatable, Sendable {
+    case userDeclined
+    case hardFailure
+}
+
 enum FileAssociationLogic {
     /// Whether the running app bundle is the default opener for an extension.
     static func isSelfDefault(
@@ -99,6 +104,21 @@ enum FileAssociationLogic {
     static let enableOrder: [ManagedJSONExtension] = [.json, .jsonl]
 
     /// Extensions already using DotJSON before this enable attempt (must not roll back on failure).
+    /// Enable-path: Finder decline often surfaces as non-`NSUserCancelledError` while default stays non-self.
+    static func classifyEnableSetFailure(
+        error: Error,
+        defaultAppAfterAttempt: URL?,
+        selfAppURL: URL
+    ) -> EnableSetFailureClassification {
+        if DefaultApplicationWorkspaceError.isUserCancellation(error) {
+            return .userDeclined
+        }
+        if !isSelfDefault(defaultApp: defaultAppAfterAttempt, selfAppURL: selfAppURL) {
+            return .userDeclined
+        }
+        return .hardFailure
+    }
+
     static func extensionsAlreadySelf(
         jsonDefault: URL?,
         jsonlDefault: URL?,

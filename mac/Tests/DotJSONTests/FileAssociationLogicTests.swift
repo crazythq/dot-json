@@ -23,6 +23,26 @@ struct FileAssociationLogicTests {
         #expect(!jsonOnly.isFullyOn)
     }
 
+    @Test func classifyDeclineWhenErrorAndDefaultNotSelf() {
+        let error = DefaultApplicationWorkspaceError.setFailed(underlyingDescription: "Cocoa error 256.")
+        let result = FileAssociationLogic.classifyEnableSetFailure(
+            error: error,
+            defaultAppAfterAttempt: otherApp,
+            selfAppURL: selfApp
+        )
+        #expect(result == .userDeclined)
+    }
+
+    @Test func classifyHardFailureWhenDefaultIsSelfDespiteError() {
+        let error = DefaultApplicationWorkspaceError.setFailed(underlyingDescription: "stuck")
+        let result = FileAssociationLogic.classifyEnableSetFailure(
+            error: error,
+            defaultAppAfterAttempt: selfApp,
+            selfAppURL: selfApp
+        )
+        #expect(result == .hardFailure)
+    }
+
     @Test func shouldNotPersistPriorWhenAlreadyFullyOn() {
         let state = FileAssociationToggleState(
             isDotJSONDefaultForJSON: true,
