@@ -93,7 +93,8 @@ final class FileAssociationCoordinator {
             guard let target = priorURL ?? FileAssociationLogic.systemFallbackApp(
                 for: rollbackExt,
                 workspaceCandidate: candidate,
-                selfAppURL: selfAppURL
+                selfAppURL: selfAppURL,
+                fileManager: fileManager
             ) else {
                 rollbackFailed = true
                 continue
@@ -131,6 +132,23 @@ final class FileAssociationCoordinator {
         case restoreFailed
     }
 
+    private func applySystemFallback(for ext: ManagedJSONExtension) async {
+        let candidate = workspace.workspaceCandidate(for: ext)
+        guard let fallback = FileAssociationLogic.systemFallbackApp(
+            for: ext,
+            workspaceCandidate: candidate,
+            selfAppURL: selfAppURL,
+            fileManager: fileManager
+        ) else {
+            return
+        }
+        do {
+            try await workspace.setDefaultApplication(at: fallback, for: ext)
+        } catch {
+            return
+        }
+    }
+
     func disableDotJSONAsDefault(for ext: ManagedJSONExtension) async -> DisableOutcome {
         let prior = priorStore.load()
         let action = FileAssociationLogic.restoreAction(
@@ -145,10 +163,10 @@ final class FileAssociationCoordinator {
             do {
                 try await workspace.setDefaultApplication(at: url, for: ext)
             } catch {
-                break
+                await applySystemFallback(for: ext)
             }
         case .resetToSystemFallback:
-            break
+            await applySystemFallback(for: ext)
         }
 
         if isDotJSONDefault(for: ext) {
@@ -172,7 +190,8 @@ final class FileAssociationCoordinator {
         guard let fallback = FileAssociationLogic.systemFallbackApp(
             for: ext,
             workspaceCandidate: candidate,
-            selfAppURL: selfAppURL
+            selfAppURL: selfAppURL,
+            fileManager: fileManager
         ) else {
             return .failure
         }
