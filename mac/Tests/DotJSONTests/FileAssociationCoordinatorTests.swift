@@ -30,6 +30,7 @@ private final class MockDefaultApplicationWorkspace: DefaultApplicationWorkspace
             throw DefaultApplicationWorkspaceError.setFailed(underlyingDescription: "mock hard failure")
         }
         if failSetFor.contains(ext) {
+            setCalls.append((appURL, ext))
             throw DefaultApplicationWorkspaceError.setFailed(underlyingDescription: "mock failure")
         }
         setCalls.append((appURL, ext))
