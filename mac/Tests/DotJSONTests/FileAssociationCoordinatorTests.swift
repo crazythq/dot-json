@@ -2,7 +2,8 @@ import Foundation
 import Testing
 @testable import DotJSON
 
-private final class MockDefaultApplicationWorkspace: DefaultApplicationWorkspace, @unchecked Sendable {
+@MainActor
+private final class MockDefaultApplicationWorkspace: DefaultApplicationWorkspace {
     var defaults: [ManagedJSONExtension: URL] = [:]
     private(set) var setCalls: [(URL, ManagedJSONExtension)] = []
     var failSetFor: Set<ManagedJSONExtension> = []

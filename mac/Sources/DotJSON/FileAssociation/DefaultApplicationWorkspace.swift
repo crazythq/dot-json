@@ -2,7 +2,8 @@ import AppKit
 import Foundation
 import UniformTypeIdentifiers
 
-/// Test seam over `NSWorkspace` default-application APIs.
+/// Test seam over `NSWorkspace` default-application APIs (MainActor; matches coordinator + AppKit).
+@MainActor
 protocol DefaultApplicationWorkspace {
     func defaultApplicationURL(for ext: ManagedJSONExtension) -> URL?
     func setDefaultApplication(at appURL: URL, for ext: ManagedJSONExtension) async throws
