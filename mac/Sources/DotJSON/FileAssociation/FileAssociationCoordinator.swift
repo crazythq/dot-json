@@ -32,6 +32,8 @@ final class FileAssociationCoordinator {
 
     enum EnableOutcome: Equatable {
         case success
+        /// User declined a macOS Finder confirmation sheet (not an app error).
+        case userCancelled
         case failure(partialRollbackFailed: Bool)
     }
 
@@ -89,6 +91,9 @@ final class FileAssociationCoordinator {
                     } catch {
                         rollbackFailed = true
                     }
+                }
+                if DefaultApplicationWorkspaceError.isUserCancellation(error) {
+                    return .userCancelled
                 }
                 return .failure(partialRollbackFailed: rollbackFailed)
             }

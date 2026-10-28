@@ -52,6 +52,7 @@ struct SettingsView: View {
             if case .failure(let rollbackFailed) = outcome {
                 FileAssociationAlerts.showEnableFailure(partialRollbackFailed: rollbackFailed)
             }
+            // `.userCancelled`: user kept prior app in Finder — sync toggle only, no alert.
         }
     }
 

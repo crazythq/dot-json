@@ -7,6 +7,7 @@ private final class MockDefaultApplicationWorkspace: DefaultApplicationWorkspace
     var defaults: [ManagedJSONExtension: URL] = [:]
     private(set) var setCalls: [(URL, ManagedJSONExtension)] = []
     var failSetFor: Set<ManagedJSONExtension> = []
+    var userCancelSetFor: Set<ManagedJSONExtension> = []
     var workspaceCandidateURL: URL?
 
     func defaultApplicationURL(for ext: ManagedJSONExtension) -> URL? {
@@ -18,6 +19,9 @@ private final class MockDefaultApplicationWorkspace: DefaultApplicationWorkspace
     }
 
     func setDefaultApplication(at appURL: URL, for ext: ManagedJSONExtension) async throws {
+        if userCancelSetFor.contains(ext) {
+            throw DefaultApplicationWorkspaceError.userCancelled
+        }
         if failSetFor.contains(ext) {
             throw DefaultApplicationWorkspaceError.setFailed(underlyingDescription: "mock failure")
         }
@@ -92,6 +96,22 @@ struct FileAssociationCoordinatorTests {
         #expect(workspace.defaults[.jsonl] == selfApp)
         #expect(store.load().jsonAppURL == vscode)
         #expect(store.load().jsonlAppURL == vscode)
+    }
+
+    @Test func enableUserDeclinedSystemPromptReturnsCancelled() async {
+        let workspace = MockDefaultApplicationWorkspace()
+        workspace.defaults[.json] = vscode
+        workspace.defaults[.jsonl] = vscode
+        workspace.userCancelSetFor = [.json]
+        let suite = "FileAssociationCoordinatorTests.userCancel"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let coordinator = makeCoordinator(workspace: workspace, priorStore: PriorHandlerStore(defaults: defaults))
+
+        let outcome = await coordinator.enableDotJSONAsDefault()
+        #expect(outcome == .userCancelled)
+        #expect(workspace.defaults[.json] == vscode)
+        #expect(workspace.setCalls.isEmpty)
     }
 
     @Test func enableJsonlFailureKeepsJsonWhenJsonAlreadySelf() async {
