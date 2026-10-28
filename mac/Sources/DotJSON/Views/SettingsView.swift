@@ -47,18 +47,12 @@ struct SettingsView: View {
                         subtitle: "Format JSON when you open a file. Restoring a saved session never formats tabs."
                     )
                 }
-                .onChange(of: formatOnOpen) { _, enabled in
-                    WorkspaceViewModel.shared?.syncFormatOnOpenToOpenTabs(enabled: enabled)
-                }
 
                 Toggle(isOn: $formatOnPaste) {
                     SettingsToggleLabels(
                         title: "Format on Paste",
                         subtitle: "Automatically format pasted JSON in the editor."
                     )
-                }
-                .onChange(of: formatOnPaste) { _, enabled in
-                    WorkspaceViewModel.shared?.syncFormatOnPasteToOpenTabs(enabled)
                 }
             }
 

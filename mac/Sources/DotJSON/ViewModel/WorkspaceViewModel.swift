@@ -62,21 +62,6 @@ final class WorkspaceViewModel {
         vm.autoFormatOnPaste = preferences.formatOnPaste
     }
 
-    /// When Format on Open is enabled in Settings, reformat open file tabs from their on-disk snapshot.
-    func syncFormatOnOpenToOpenTabs(enabled: Bool) {
-        guard enabled else { return }
-        for tab in tabs where tab.fileURL != nil {
-            tab.applyFormatOnOpen()
-        }
-    }
-
-    /// Keeps paste formatting in sync when the Settings toggle changes.
-    func syncFormatOnPasteToOpenTabs(_ enabled: Bool) {
-        for tab in tabs {
-            tab.autoFormatOnPaste = enabled
-        }
-    }
-
     // MARK: - Tab Management
 
     func newTab() {

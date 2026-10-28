@@ -41,6 +41,8 @@ struct GeneralEditorSettingsTests {
         #expect(settingsSource.contains("Format on Paste"))
         #expect(settingsSource.contains("Section(\"Files\")"))
         #expect(!commandsSource.contains("Clear Menu"))
+        #expect(!settingsSource.contains("syncFormatOnPaste"))
+        #expect(!settingsSource.contains("syncFormatOnOpen"))
     }
 
     @Test func appPreferencesDefaultValues() {
@@ -174,19 +176,31 @@ struct GeneralEditorSettingsTests {
         #expect(ws.tabs.last?.indent == .twoSpaces)
     }
 
-    @Test func syncFormatOnPasteUpdatesOpenTabs() {
+    @Test func formatOnPastePreferenceDoesNotChangeOpenTabs() {
         let defaults = isolatedDefaults()
+        let prefs = AppPreferences(defaults: defaults)
+        prefs.formatOnPaste = true
         defaults.removeObject(forKey: "dotjson.workspaceState")
+
         let ws = WorkspaceViewModel(userDefaults: defaults)
         ws.closeAllTabs()
         ws.newTab()
+        #expect(ws.tabs[0].autoFormatOnPaste == true)
+
+        prefs.formatOnPaste = false
+        #expect(ws.tabs[0].autoFormatOnPaste == true)
+    }
+
+    @Test func newTabUsesFormatOnPasteFromPreferences() {
+        let defaults = isolatedDefaults()
+        let prefs = AppPreferences(defaults: defaults)
+        prefs.formatOnPaste = false
+        defaults.removeObject(forKey: "dotjson.workspaceState")
+
+        let ws = WorkspaceViewModel(userDefaults: defaults)
+        ws.closeAllTabs()
         ws.newTab()
-        ws.tabs[0].autoFormatOnPaste = true
-        ws.tabs[1].autoFormatOnPaste = true
 
-        ws.syncFormatOnPasteToOpenTabs(false)
-
-        #expect(ws.tabs[0].autoFormatOnPaste == false)
-        #expect(ws.tabs[1].autoFormatOnPaste == false)
+        #expect(ws.tabs.last?.autoFormatOnPaste == false)
     }
 }
