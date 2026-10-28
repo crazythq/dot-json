@@ -44,7 +44,7 @@ struct FileAssociationLogicTests {
     @Test func rollbackOrderIsJsonlThenJson() {
         let prior = PriorHandlerSnapshot(jsonAppURL: otherApp, jsonlAppURL: textEdit)
         let targets = FileAssociationLogic.rollbackTargetsAfterPartialEnable(
-            succeeded: [.json, .jsonl],
+            changedToSelf: [.json, .jsonl],
             prior: prior
         )
         #expect(targets.map(\.0) == [.jsonl, .json])
