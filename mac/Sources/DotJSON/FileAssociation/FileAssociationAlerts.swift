@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 
+@MainActor
 enum FileAssociationAlerts {
     private static let getInfoSteps = """
     Manual steps:

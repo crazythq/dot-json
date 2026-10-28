@@ -31,11 +31,7 @@ struct FileAssociationSettingsTests {
     }
 
     @Test func infoPlistDeclaresJsonlWithoutOwningPublicJsonl() throws {
-        let plistURL = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Info.plist")
+        let plistURL = macPackageRoot().appendingPathComponent("Info.plist")
         let plist = try String(contentsOf: plistURL, encoding: .utf8)
 
         #expect(plist.contains("sh.crazy.dotjson.jsonl"))
