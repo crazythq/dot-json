@@ -107,6 +107,7 @@ struct ToolbarView: ToolbarContent {
             } label: {
                 toolbarActionLabel("Export", systemImage: "square.and.arrow.up")
             }
+            .buttonStyle(ToolbarActionButtonStyle())
             .help("Export JSON")
         }
     }
