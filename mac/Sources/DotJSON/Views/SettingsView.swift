@@ -99,23 +99,6 @@ struct SettingsView: View {
         )
     }
 
-}
-
-private struct FileAssociationToggleLabels: View {
-    let title: String
-    let subtitle: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-            Text(subtitle)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-    }
-}
-
-extension SettingsView {
     private func runReset(for ext: ManagedJSONExtension) {
         busyExtensions.insert(ext)
         Task {
@@ -128,6 +111,20 @@ extension SettingsView {
             case .failure:
                 FileAssociationAlerts.showResetFailure(for: ext)
             }
+        }
+    }
+}
+
+private struct FileAssociationToggleLabels: View {
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+            Text(subtitle)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
         }
     }
 }

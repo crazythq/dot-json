@@ -26,9 +26,13 @@ private final class MockDefaultApplicationWorkspace: DefaultApplicationWorkspace
             throw DefaultApplicationWorkspaceError.userCancelled
         }
         if hardFailSetFor.contains(ext) {
-            setCalls.append((appURL, ext))
-            defaults[ext] = appURL
-            throw DefaultApplicationWorkspaceError.setFailed(underlyingDescription: "mock hard failure")
+            let remaining = hardFailBudget[ext] ?? 1
+            if remaining > 0 {
+                hardFailBudget[ext] = remaining - 1
+                setCalls.append((appURL, ext))
+                defaults[ext] = appURL
+                throw DefaultApplicationWorkspaceError.setFailed(underlyingDescription: "mock hard failure")
+            }
         }
         if failSetFor.contains(ext) {
             setCalls.append((appURL, ext))
@@ -138,6 +142,7 @@ struct FileAssociationCoordinatorTests {
         let workspace = MockDefaultApplicationWorkspace()
         workspace.defaults[.json] = vscode
         workspace.hardFailSetFor = [.json]
+        workspace.hardFailBudget[.json] = 1
         let coordinator = makeCoordinator(
             workspace: workspace,
             priorStore: PriorHandlerStore(defaults: UserDefaults(suiteName: "FileAssociationCoordinatorTests.hard")!)
@@ -145,6 +150,24 @@ struct FileAssociationCoordinatorTests {
 
         let outcome = await coordinator.enableDotJSONAsDefault(for: .json)
         #expect(outcome == .failure(partialRollbackFailed: false))
+        #expect(workspace.defaults[.json] == vscode)
+    }
+
+    @Test func enableHardFailureWhenRollbackAlsoFails() async {
+        let workspace = MockDefaultApplicationWorkspace()
+        workspace.defaults[.json] = vscode
+        workspace.hardFailSetFor = [.json]
+        workspace.hardFailBudget[.json] = 2
+        let suite = "FileAssociationCoordinatorTests.hardRollback"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = PriorHandlerStore(defaults: defaults)
+        store.save(PriorHandlerSnapshot(jsonAppURL: vscode, jsonlAppURL: nil))
+        let coordinator = makeCoordinator(workspace: workspace, priorStore: store)
+
+        let outcome = await coordinator.enableDotJSONAsDefault(for: .json)
+        #expect(outcome == .failure(partialRollbackFailed: true))
+        #expect(workspace.defaults[.json] == selfApp)
     }
 
     @Test func disableJsonDoesNotChangeJsonl() async {
