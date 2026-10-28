@@ -8,6 +8,8 @@ private final class MockDefaultApplicationWorkspace: DefaultApplicationWorkspace
     private(set) var setCalls: [(URL, ManagedJSONExtension)] = []
     var failSetFor: Set<ManagedJSONExtension> = []
     var hardFailSetFor: Set<ManagedJSONExtension> = []
+    /// Hard-fail budget per extension (default 1 when in `hardFailSetFor`). Rollback uses the same API.
+    var hardFailBudget: [ManagedJSONExtension: Int] = [:]
     var userCancelSetFor: Set<ManagedJSONExtension> = []
     var workspaceCandidateURL: URL?
 
