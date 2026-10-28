@@ -3,7 +3,7 @@ import Foundation
 import UniformTypeIdentifiers
 
 /// Test seam over `NSWorkspace` default-application APIs.
-protocol DefaultApplicationWorkspace: Sendable {
+protocol DefaultApplicationWorkspace {
     func defaultApplicationURL(for ext: ManagedJSONExtension) -> URL?
     func setDefaultApplication(at appURL: URL, for ext: ManagedJSONExtension) async throws
     func workspaceCandidate(for ext: ManagedJSONExtension) -> URL?

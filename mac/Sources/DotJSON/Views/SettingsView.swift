@@ -51,29 +51,37 @@ struct SettingsView: View {
     }
 
     private func turnOff() {
-        FileAssociationAlerts.confirmDisable {
-            isBusy = true
-            Task {
-                let outcome = await coordinator.disableDotJSONAsDefault()
-                syncToggleFromSystem()
-                isBusy = false
-                switch outcome {
-                case .success:
-                    FileAssociationAlerts.showDisableSuccess()
-                case .restoreFailed:
-                    FileAssociationAlerts.showDisableFailure(offerReset: true) {
-                        runReset()
+        FileAssociationAlerts.confirmDisable(
+            onConfirm: {
+                isBusy = true
+                Task {
+                    let outcome = await coordinator.disableDotJSONAsDefault()
+                    syncToggleFromSystem()
+                    isBusy = false
+                    switch outcome {
+                    case .success:
+                        FileAssociationAlerts.showDisableSuccess()
+                    case .partialRestore(let stillDotJSON):
+                        FileAssociationAlerts.showDisablePartialRestore(
+                            extensionsStillDotJSON: stillDotJSON
+                        ) {
+                            runReset()
+                        }
+                    case .restoreFailed:
+                        FileAssociationAlerts.showDisableFailure(offerReset: true) {
+                            runReset()
+                        }
                     }
                 }
+            },
+            onCancel: {
+                syncToggleFromSystem()
             }
-        }
-        // Re-sync immediately in case user cancels confirmation (toggle may have flipped).
-        DispatchQueue.main.async {
-            syncToggleFromSystem()
-        }
+        )
     }
 
     private func runReset() {
+        let targetsBefore = extensionsStillOnDotJSON()
         isBusy = true
         Task {
             let outcome = await coordinator.resetToMacOSDefaults()
@@ -81,9 +89,19 @@ struct SettingsView: View {
             isBusy = false
             switch outcome {
             case .success:
-                FileAssociationAlerts.showResetSuccess()
+                FileAssociationAlerts.showResetSuccess(resetExtensions: targetsBefore)
             case .failure:
                 FileAssociationAlerts.showResetFailure()
+            }
+        }
+    }
+
+    private func extensionsStillOnDotJSON() -> [ManagedJSONExtension] {
+        let json = coordinator.refreshToggleState()
+        return ManagedJSONExtension.allCases.filter { ext in
+            switch ext {
+            case .json: json.isDotJSONDefaultForJSON
+            case .jsonl: json.isDotJSONDefaultForJSONL
             }
         }
     }

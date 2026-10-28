@@ -41,6 +41,33 @@ enum FileAssociationAlerts {
         )
     }
 
+    static func showDisablePartialRestore(
+        extensionsStillDotJSON: [ManagedJSONExtension],
+        onReset: @escaping () -> Void
+    ) {
+        let types = extensionsStillDotJSON.map { ".\($0.rawValue)" }.joined(separator: " and ")
+        var message =
+            "Some file types were restored, but \(types) still open in DotJSON."
+        message += "\n\n\(getInfoSteps)"
+        presentAlert(
+            title: "Restore Incomplete",
+            message: message,
+            informativeText:
+                "Reset to macOS Default will only change file types still set to DotJSON.",
+            buttons: ["OK", "Reset to macOS Default", "Open System Settings…"],
+            defaultButtonIndex: 0
+        ) { response in
+            switch response {
+            case .alertSecondButtonReturn:
+                onReset()
+            case .alertThirdButtonReturn:
+                openSystemSettingsIfPossible()
+            default:
+                break
+            }
+        }
+    }
+
     static func showDisableFailure(offerReset: Bool, onReset: @escaping () -> Void) {
         var buttons = ["OK", "Open System Settings…"]
         if offerReset {
@@ -72,10 +99,14 @@ enum FileAssociationAlerts {
         }
     }
 
-    static func showResetSuccess() {
+    static func showResetSuccess(resetExtensions: [ManagedJSONExtension]) {
+        let types = resetExtensions.map { ".\($0.rawValue)" }.joined(separator: " and ")
+        let message = types.isEmpty
+            ? "macOS default apps were updated where needed."
+            : "macOS default apps were applied for \(types)."
         presentAlert(
             title: "Defaults Reset",
-            message: "macOS default apps were applied for .json and .jsonl.",
+            message: message,
             informativeText: nil,
             buttons: ["OK"],
             defaultButtonIndex: 0,
@@ -99,7 +130,7 @@ enum FileAssociationAlerts {
         }
     }
 
-    static func confirmDisable(onConfirm: @escaping () -> Void) {
+    static func confirmDisable(onConfirm: @escaping () -> Void, onCancel: (() -> Void)? = nil) {
         presentAlert(
             title: "Stop Opening JSON with DotJSON?",
             message: "This will restore the apps that opened .json and .jsonl before you turned this on.",
@@ -109,6 +140,8 @@ enum FileAssociationAlerts {
         ) { response in
             if response == .alertSecondButtonReturn {
                 onConfirm()
+            } else {
+                onCancel?()
             }
         }
     }
@@ -142,6 +175,9 @@ enum FileAssociationAlerts {
             alert.addButton(withTitle: button)
         }
         alert.alertStyle = .warning
+        if defaultButtonIndex >= 0, defaultButtonIndex < alert.buttons.count {
+            alert.buttons[defaultButtonIndex].keyEquivalent = "\r"
+        }
         let response = alert.runModal()
         handler?(response)
     }

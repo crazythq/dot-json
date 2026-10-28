@@ -50,16 +50,24 @@ final class FileAssociationCoordinator {
         }
 
         let prior = priorStore.load()
-        var succeeded: [ManagedJSONExtension] = []
+        let alreadySelf = FileAssociationLogic.extensionsAlreadySelf(
+            jsonDefault: jsonDefault,
+            jsonlDefault: jsonlDefault,
+            selfAppURL: selfAppURL
+        )
+        var changedToSelf: [ManagedJSONExtension] = []
 
         for ext in FileAssociationLogic.enableOrder {
+            if alreadySelf.contains(ext) {
+                continue
+            }
             do {
                 try await workspace.setDefaultApplication(at: selfAppURL, for: ext)
-                succeeded.append(ext)
+                changedToSelf.append(ext)
             } catch {
                 var rollbackFailed = false
                 let rollbacks = FileAssociationLogic.rollbackTargetsAfterPartialEnable(
-                    succeeded: succeeded,
+                    changedToSelf: changedToSelf,
                     prior: prior
                 )
                 for (rollbackExt, priorURL) in rollbacks {
@@ -86,12 +94,12 @@ final class FileAssociationCoordinator {
 
     enum DisableOutcome: Equatable {
         case success
+        case partialRestore(extensionsStillDotJSON: [ManagedJSONExtension])
         case restoreFailed
     }
 
     func disableDotJSONAsDefault() async -> DisableOutcome {
         let prior = priorStore.load()
-        var failed: [ManagedJSONExtension] = []
 
         for ext in ManagedJSONExtension.allCases {
             let action = FileAssociationLogic.restoreAction(
@@ -106,17 +114,28 @@ final class FileAssociationCoordinator {
                 do {
                     try await workspace.setDefaultApplication(at: url, for: ext)
                 } catch {
-                    failed.append(ext)
+                    break
                 }
             case .resetToSystemFallback:
-                failed.append(ext)
+                break
             }
         }
 
-        if failed.isEmpty {
+        let jsonDefault = workspace.defaultApplicationURL(for: .json)
+        let jsonlDefault = workspace.defaultApplicationURL(for: .jsonl)
+        let stillDotJSON = FileAssociationLogic.extensionsStillUsingSelf(
+            jsonDefault: jsonDefault,
+            jsonlDefault: jsonlDefault,
+            selfAppURL: selfAppURL
+        )
+
+        if stillDotJSON.isEmpty {
             return .success
         }
-        return .restoreFailed
+        if stillDotJSON.count == ManagedJSONExtension.allCases.count {
+            return .restoreFailed
+        }
+        return .partialRestore(extensionsStillDotJSON: stillDotJSON)
     }
 
     enum ResetOutcome: Equatable {
@@ -125,8 +144,19 @@ final class FileAssociationCoordinator {
     }
 
     func resetToMacOSDefaults() async -> ResetOutcome {
+        let jsonDefault = workspace.defaultApplicationURL(for: .json)
+        let jsonlDefault = workspace.defaultApplicationURL(for: .jsonl)
+        let targets = FileAssociationLogic.extensionsStillUsingSelf(
+            jsonDefault: jsonDefault,
+            jsonlDefault: jsonlDefault,
+            selfAppURL: selfAppURL
+        )
+        guard !targets.isEmpty else {
+            return .success
+        }
+
         var anyFailure = false
-        for ext in ManagedJSONExtension.allCases {
+        for ext in targets {
             let candidate = workspace.workspaceCandidate(for: ext)
             guard let fallback = FileAssociationLogic.systemFallbackApp(
                 for: ext,

@@ -77,6 +77,25 @@ struct FileAssociationCoordinatorTests {
         #expect(store.load().jsonlAppURL == vscode)
     }
 
+    @Test func enableJsonlFailureKeepsJsonWhenJsonAlreadySelf() async {
+        let workspace = MockDefaultApplicationWorkspace()
+        workspace.defaults[.json] = selfApp
+        workspace.defaults[.jsonl] = vscode
+        workspace.failSetFor = [.jsonl]
+        let suite = "FileAssociationCoordinatorTests.halfOpenAlreadySelf"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = PriorHandlerStore(defaults: defaults)
+        store.save(PriorHandlerSnapshot(jsonAppURL: vscode, jsonlAppURL: vscode))
+        let coordinator = makeCoordinator(workspace: workspace, priorStore: store)
+
+        let outcome = await coordinator.enableDotJSONAsDefault()
+        #expect(outcome == .failure(partialRollbackFailed: false))
+        #expect(workspace.defaults[.json] == selfApp)
+        #expect(workspace.defaults[.jsonl] == vscode)
+        #expect(!workspace.setCalls.contains { $0.1 == .json })
+    }
+
     @Test func enableJsonlFailureRollsBackJson() async {
         let workspace = MockDefaultApplicationWorkspace()
         workspace.defaults[.json] = vscode
@@ -110,6 +129,40 @@ struct FileAssociationCoordinatorTests {
         #expect(outcome == .success)
         #expect(workspace.defaults[.json] == vscode)
         #expect(workspace.defaults[.jsonl] == vscode)
+    }
+
+    @Test func disablePartialRestoreWhenOneSideRestored() async {
+        let workspace = MockDefaultApplicationWorkspace()
+        workspace.defaults[.json] = selfApp
+        workspace.defaults[.jsonl] = selfApp
+        let suite = "FileAssociationCoordinatorTests.partialDisable"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = PriorHandlerStore(defaults: defaults)
+        store.save(PriorHandlerSnapshot(jsonAppURL: vscode, jsonlAppURL: nil))
+        let coordinator = makeCoordinator(workspace: workspace, priorStore: store)
+
+        let outcome = await coordinator.disableDotJSONAsDefault()
+        #expect(outcome == .partialRestore(extensionsStillDotJSON: [.jsonl]))
+        #expect(workspace.defaults[.json] == vscode)
+        #expect(workspace.defaults[.jsonl] == selfApp)
+    }
+
+    @Test func resetOnlyTouchesExtensionsStillOnDotJSON() async {
+        let workspace = MockDefaultApplicationWorkspace()
+        workspace.defaults[.json] = vscode
+        workspace.defaults[.jsonl] = selfApp
+        workspace.workspaceCandidateURL = textEdit
+        let suite = "FileAssociationCoordinatorTests.resetPartial"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = PriorHandlerStore(defaults: defaults)
+        let coordinator = makeCoordinator(workspace: workspace, priorStore: store)
+
+        let outcome = await coordinator.resetToMacOSDefaults()
+        #expect(outcome == .success)
+        #expect(workspace.defaults[.json] == vscode)
+        #expect(workspace.defaults[.jsonl] == textEdit)
     }
 
     @Test func disableMissingPriorReturnsRestoreFailed() async {

@@ -98,13 +98,40 @@ enum FileAssociationLogic {
     /// Order for applying defaults when turning on.
     static let enableOrder: [ManagedJSONExtension] = [.json, .jsonl]
 
-    /// After a partial enable failure, roll back extensions that already succeeded (reverse order).
+    /// Extensions already using DotJSON before this enable attempt (must not roll back on failure).
+    static func extensionsAlreadySelf(
+        jsonDefault: URL?,
+        jsonlDefault: URL?,
+        selfAppURL: URL
+    ) -> Set<ManagedJSONExtension> {
+        var already = Set<ManagedJSONExtension>()
+        if isSelfDefault(defaultApp: jsonDefault, selfAppURL: selfAppURL) {
+            already.insert(.json)
+        }
+        if isSelfDefault(defaultApp: jsonlDefault, selfAppURL: selfAppURL) {
+            already.insert(.jsonl)
+        }
+        return already
+    }
+
+    /// After a partial enable failure, roll back only extensions changed non-self → DotJSON (reverse order).
     static func rollbackTargetsAfterPartialEnable(
-        succeeded: [ManagedJSONExtension],
+        changedToSelf: [ManagedJSONExtension],
         prior: PriorHandlerSnapshot
     ) -> [(ManagedJSONExtension, URL?)] {
-        succeeded.reversed().map { ext in
+        changedToSelf.reversed().map { ext in
             (ext, prior.url(for: ext))
+        }
+    }
+
+    static func extensionsStillUsingSelf(
+        jsonDefault: URL?,
+        jsonlDefault: URL?,
+        selfAppURL: URL
+    ) -> [ManagedJSONExtension] {
+        ManagedJSONExtension.allCases.filter { ext in
+            let defaultApp = ext == .json ? jsonDefault : jsonlDefault
+            return isSelfDefault(defaultApp: defaultApp, selfAppURL: selfAppURL)
         }
     }
 
@@ -139,10 +166,17 @@ enum FileAssociationLogic {
            workspaceCandidate.standardizedFileURL != selfAppURL.standardizedFileURL {
             return workspaceCandidate
         }
-        let textEdit = URL(fileURLWithPath: "/System/Applications/TextEdit.app")
-        if FileManager.default.fileExists(atPath: textEdit.path) {
-            return textEdit
+        let bundledFallbacks = [
+            "/System/Applications/TextEdit.app",
+            "/Applications/TextEdit.app",
+        ]
+        for path in bundledFallbacks {
+            let url = URL(fileURLWithPath: path)
+            if FileManager.default.fileExists(atPath: path),
+               url.standardizedFileURL != selfAppURL.standardizedFileURL {
+                return url
+            }
         }
-        return workspaceCandidate
+        return nil
     }
 }

@@ -53,11 +53,21 @@ struct FileAssociationLogicTests {
     @Test func rollbackIncludesNilPriorForSucceededExtension() {
         let prior = PriorHandlerSnapshot(jsonAppURL: otherApp, jsonlAppURL: nil)
         let targets = FileAssociationLogic.rollbackTargetsAfterPartialEnable(
-            succeeded: [.json, .jsonl],
+            changedToSelf: [.jsonl],
             prior: prior
         )
-        #expect(targets.count == 2)
+        #expect(targets.count == 1)
+        #expect(targets[0].0 == .jsonl)
         #expect(targets[0].1 == nil)
+    }
+
+    @Test func rollbackSkipsExtensionsAlreadySelfBeforeEnable() {
+        let prior = PriorHandlerSnapshot(jsonAppURL: otherApp, jsonlAppURL: otherApp)
+        let targets = FileAssociationLogic.rollbackTargetsAfterPartialEnable(
+            changedToSelf: [.jsonl],
+            prior: prior
+        )
+        #expect(targets.map(\.0) == [.jsonl])
     }
 
     @Test func restoreMissingPriorOffersReset() {
