@@ -11,7 +11,7 @@ struct SettingsView: View {
             Section("Files") {
                 Toggle(isOn: binding(for: .json)) {
                     FileAssociationToggleLabels(
-                        title: "Open .json files",
+                        title: "Associate with .json files",
                         subtitle: "Use DotJSON as the default app"
                     )
                 }
@@ -19,7 +19,7 @@ struct SettingsView: View {
 
                 Toggle(isOn: binding(for: .jsonl)) {
                     FileAssociationToggleLabels(
-                        title: "Open .jsonl files",
+                        title: "Associate with .jsonl files",
                         subtitle: "Use DotJSON as the default app"
                     )
                 }
