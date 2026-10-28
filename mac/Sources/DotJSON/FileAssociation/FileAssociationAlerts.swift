@@ -30,17 +30,6 @@ enum FileAssociationAlerts {
         }
     }
 
-    static func showDisableSuccess() {
-        presentAlert(
-            title: "Default App Restored",
-            message: "Your previous default apps for .json and .jsonl were restored.",
-            informativeText: nil,
-            buttons: ["OK"],
-            defaultButtonIndex: 0,
-            handler: nil
-        )
-    }
-
     static func showDisablePartialRestore(
         extensionsStillDotJSON: [ManagedJSONExtension],
         onReset: @escaping () -> Void

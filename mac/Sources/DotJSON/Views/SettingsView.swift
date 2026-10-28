@@ -66,7 +66,7 @@ struct SettingsView: View {
                     isBusy = false
                     switch outcome {
                     case .success:
-                        FileAssociationAlerts.showDisableSuccess()
+                        break
                     case .partialRestore(let stillDotJSON):
                         FileAssociationAlerts.showDisablePartialRestore(
                             extensionsStillDotJSON: stillDotJSON
