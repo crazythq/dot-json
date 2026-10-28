@@ -6,11 +6,14 @@ private enum ToolbarMetrics {
     static let searchFieldWidth: CGFloat = 140
     static let controlSpacing: CGFloat = 6
     static let symbolPointSize: CGFloat = 14
-    static let titleAndIconHorizontalPadding: CGFloat = 8
-    static let titleAndIconVerticalPadding: CGFloat = 4
-    static let titleAndIconSpacing: CGFloat = 5
+    static let captionPointSize: CGFloat = 11
+    static let verticalIconTitleSpacing: CGFloat = 2
+    static let verticalHorizontalPadding: CGFloat = 8
+    static let verticalVerticalPadding: CGFloat = 4
+    static let verticalButtonMinHeight: CGFloat = 38
     static let iconOnlyPadding: CGFloat = 6
     static let iconOnlyHitSize: CGFloat = 28
+    static let actionCornerRadius: CGFloat = 6
     /// Below this content width, hide icon captions before relying on toolbar overflow.
     static let hideTextBelowWidth: CGFloat = 780
 }
@@ -28,20 +31,19 @@ struct ToolbarView: ToolbarContent {
 
     var body: some ToolbarContent {
         ToolbarItem {
-            toolbarIconButton("Format", systemImage: "text.alignleft") {
+            toolbarActionButton("Format", systemImage: "text.alignleft") {
                 workspace.activeDocument?.format()
             }
             .help("Format JSON")
         }
 
         ToolbarItem {
-            toolbarIconButton("Minify", systemImage: "text.aligncenter") {
+            toolbarActionButton("Minify", systemImage: "text.aligncenter") {
                 workspace.activeDocument?.minify()
             }
             .help("Minify JSON")
         }
 
-        // ── Python / 标准 JSON 互转 ──
         ToolbarItem {
             Menu {
                 Button {
@@ -55,24 +57,24 @@ struct ToolbarView: ToolbarContent {
                     Text("toolbar.convert.toJSON", bundle: .module)
                 }
             } label: {
-                toolbarIconLabel(
+                toolbarActionLabel(
                     String(localized: "toolbar.convert", bundle: .module),
                     systemImage: "arrow.left.arrow.right"
                 )
             }
+            .buttonStyle(ToolbarActionButtonStyle())
             .help(Text("toolbar.convert.help", bundle: .module))
         }
 
-        // ── 文件操作 ──
         ToolbarItem {
-            toolbarIconButton("Clear", systemImage: "trash") {
+            toolbarActionButton("Clear", systemImage: "trash") {
                 workspace.activeDocument?.clear()
             }
             .help("Clear content")
         }
 
         ToolbarItem {
-            toolbarIconButton("Paste", systemImage: "doc.on.clipboard") {
+            toolbarActionButton("Paste", systemImage: "doc.on.clipboard") {
                 pasteFromClipboard()
             }
             .help("Paste and format")
@@ -80,7 +82,7 @@ struct ToolbarView: ToolbarContent {
         }
 
         ToolbarItem {
-            toolbarIconButton("Copy", systemImage: "doc.on.doc") {
+            toolbarActionButton("Copy", systemImage: "doc.on.doc") {
                 copyToClipboard()
             }
             .help("Copy to clipboard")
@@ -88,7 +90,7 @@ struct ToolbarView: ToolbarContent {
 
         // ── 导入/导出 ──
         ToolbarItem {
-            toolbarIconButton("Import", systemImage: "square.and.arrow.down") {
+            toolbarActionButton("Import", systemImage: "square.and.arrow.down") {
                 importDocument()
             }
             .help("Import JSON file")
@@ -103,26 +105,27 @@ struct ToolbarView: ToolbarContent {
                     export(format: .minified)
                 }
             } label: {
-                toolbarIconLabel("Export", systemImage: "square.and.arrow.up")
+                toolbarActionLabel("Export", systemImage: "square.and.arrow.up")
             }
             .help("Export JSON")
         }
     }
 
-    private func toolbarIconButton(
+    private func toolbarActionButton(
         _ title: String,
         systemImage: String,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            toolbarIconLabel(title, systemImage: systemImage)
+            toolbarActionLabel(title, systemImage: systemImage)
         }
+        .buttonStyle(ToolbarActionButtonStyle())
         .accessibilityLabel(title)
     }
 
-    private func toolbarIconLabel(_ title: String, systemImage: String) -> some View {
+    private func toolbarActionLabel(_ title: String, systemImage: String) -> some View {
         Label(title, systemImage: systemImage)
-            .labelStyle(ToolbarAdaptiveLabelStyle(showsText: showsToolbarText))
+            .labelStyle(ToolbarActionLabelStyle(showsText: showsToolbarText))
             .contentShape(Rectangle())
             .contextMenu {
                 Toggle("Show Text", isOn: $toolbarShowsText)
@@ -170,21 +173,26 @@ struct ToolbarView: ToolbarContent {
     }
 }
 
-/// Horizontal icon+title or padded icon-only layout so toolbar and overflow menus keep SF Symbol icons.
-private struct ToolbarAdaptiveLabelStyle: LabelStyle {
+/// Icon above caption (wide) or padded icon-only (half-fold). Keeps `Label` for overflow `>>` menus.
+private struct ToolbarActionLabelStyle: LabelStyle {
     let showsText: Bool
 
     func makeBody(configuration: Configuration) -> some View {
         Group {
             if showsText {
-                HStack(spacing: ToolbarMetrics.titleAndIconSpacing) {
+                VStack(spacing: ToolbarMetrics.verticalIconTitleSpacing) {
                     configuration.icon
                         .font(.system(size: ToolbarMetrics.symbolPointSize))
+                        .frame(maxWidth: .infinity, alignment: .center)
+
                     configuration.title
-                        .font(.system(size: ToolbarMetrics.symbolPointSize))
+                        .font(.system(size: ToolbarMetrics.captionPointSize))
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .center)
                 }
-                .padding(.horizontal, ToolbarMetrics.titleAndIconHorizontalPadding)
-                .padding(.vertical, ToolbarMetrics.titleAndIconVerticalPadding)
+                .padding(.horizontal, ToolbarMetrics.verticalHorizontalPadding)
+                .padding(.vertical, ToolbarMetrics.verticalVerticalPadding)
+                .frame(minHeight: ToolbarMetrics.verticalButtonMinHeight)
             } else {
                 configuration.icon
                     .font(.system(size: ToolbarMetrics.symbolPointSize))
@@ -196,5 +204,20 @@ private struct ToolbarAdaptiveLabelStyle: LabelStyle {
             }
         }
         .foregroundStyle(.primary)
+    }
+}
+
+/// Rounded border wraps the full action label (icon + caption rows).
+private struct ToolbarActionButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background {
+                RoundedRectangle(cornerRadius: ToolbarMetrics.actionCornerRadius, style: .continuous)
+                    .fill(Color.primary.opacity(0.06))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: ToolbarMetrics.actionCornerRadius, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.2), lineWidth: 0.5)
+            }
     }
 }
