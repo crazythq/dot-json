@@ -113,13 +113,13 @@ final class FileAssociationCoordinator {
         changedToSelf: [ManagedJSONExtension],
         prior: PriorHandlerSnapshot
     ) async -> EnableOutcome {
-        let rollbackFailed = await rollbackChangedToSelf(changedToSelf: changedToSelf, prior: prior)
-        let defaultNow = workspace.defaultApplicationURL(for: failingExtension)
+        let defaultAfterAttempt = workspace.defaultApplicationURL(for: failingExtension)
         let classification = FileAssociationLogic.classifyEnableSetFailure(
             error: error,
-            defaultAppAfterAttempt: defaultNow,
+            defaultAppAfterAttempt: defaultAfterAttempt,
             selfAppURL: selfAppURL
         )
+        let rollbackFailed = await rollbackChangedToSelf(changedToSelf: changedToSelf, prior: prior)
         if classification == .userDeclined {
             return .userCancelled
         }
