@@ -10,18 +10,24 @@ struct SettingsView: View {
         Form {
             Section("Files") {
                 Toggle(isOn: binding(for: .json)) {
-                    Text("Open .json files with DotJSON")
+                    FileAssociationToggleLabels(
+                        title: "Open .json files",
+                        subtitle: "Use DotJSON as the default app"
+                    )
                 }
                 .disabled(busyExtensions.contains(.json))
 
                 Toggle(isOn: binding(for: .jsonl)) {
-                    Text("Open .jsonl files with DotJSON")
+                    FileAssociationToggleLabels(
+                        title: "Open .jsonl files",
+                        subtitle: "Use DotJSON as the default app"
+                    )
                 }
                 .disabled(busyExtensions.contains(.jsonl))
             }
         }
         .formStyle(.grouped)
-        .frame(width: 420, height: 150)
+        .frame(width: 420, height: 168)
         .onAppear {
             syncTogglesFromSystem()
         }
@@ -93,6 +99,23 @@ struct SettingsView: View {
         )
     }
 
+}
+
+private struct FileAssociationToggleLabels: View {
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+            Text(subtitle)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+extension SettingsView {
     private func runReset(for ext: ManagedJSONExtension) {
         busyExtensions.insert(ext)
         Task {
