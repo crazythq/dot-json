@@ -195,7 +195,7 @@ struct FileAssociationCoordinatorTests {
     }
 
     @Test func disableWhenPriorAppMissingUsesSystemFallback() async {
-        let missingPrior = URL(fileURLWithPath: "/Applications/Visual Studio Code.app")
+        let missingPrior = URL(fileURLWithPath: "/Applications/DotJSONCIMissingPriorApp.app")
         let workspace = MockDefaultApplicationWorkspace()
         workspace.defaults[.json] = selfApp
         workspace.workspaceCandidateURL = textEdit
