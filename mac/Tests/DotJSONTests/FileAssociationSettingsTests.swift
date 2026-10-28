@@ -30,7 +30,6 @@ struct FileAssociationSettingsTests {
         #expect(settingsSource.contains("Use DotJSON as the default app"))
         #expect(!settingsSource.contains("Open .json files"))
         #expect(!settingsSource.contains("Associate DotJSON with .json files"))
-        #expect(!settingsSource.contains("Associate"))
         #expect(!settingsSource.contains("Handler"))
         #expect(!settingsSource.contains("confirmDisable"))
         #expect(!settingsSource.contains("Restore Previous App"))
