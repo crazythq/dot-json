@@ -1,11 +1,20 @@
 import SwiftUI
 import AppKit
 
+private struct MainWindowContentWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat { .greatestFiniteMagnitude }
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 struct ContentView: View {
     @Environment(WorkspaceViewModel.self) private var workspace
     @State private var treeSearchText: String = ""
     @State private var treeSearchVisible = false
     @FocusState private var treeSearchFocused: Bool
+    @State private var mainWindowContentWidth: CGFloat = .greatestFiniteMagnitude
 
     var body: some View {
         VStack(spacing: 0) {
@@ -47,9 +56,20 @@ struct ContentView: View {
                 }
             }
         }
+        .background {
+            GeometryReader { geometry in
+                Color.clear.preference(
+                    key: MainWindowContentWidthKey.self,
+                    value: geometry.size.width
+                )
+            }
+        }
+        .onPreferenceChange(MainWindowContentWidthKey.self) { width in
+            mainWindowContentWidth = width
+        }
         .background(Color(hex: "#1a1a1a"))
         .toolbar {
-            ToolbarView()
+            ToolbarView(windowWidth: mainWindowContentWidth)
         }
         .onOpenURL { url in
             workspace.openDocuments([url])

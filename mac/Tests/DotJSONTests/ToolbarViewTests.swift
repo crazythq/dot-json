@@ -30,29 +30,22 @@ struct ToolbarViewTests {
         #expect(!source.contains("Divider()"))
     }
 
-    /// 验证格式化与压缩按钮使用成对的 JSON 结构矢量图标，同时保留原有操作。
+    /// 工具栏不再提供缩进下拉控件；各标签页的缩进状态仍由文档模型保留。
     ///
     /// - Throws: 无法读取工具栏源码时抛出文件读取错误。
-    @Test func indentUsesCompactStandaloneAppKitPopUp() throws {
+    @Test func toolbarDoesNotIncludeIndentPopUpButton() throws {
         let source = try toolbarSource()
-        let popupSourceURL = URL(fileURLWithPath: #filePath)
+        let popupURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Sources/DotJSON/Views/IndentPopUpButton.swift")
-        let popupSource = try String(contentsOf: popupSourceURL, encoding: .utf8)
 
-        #expect(source.contains("ToolbarItem(placement: .automatic)"))
-        #expect(source.contains("IndentPopUpButton(document: doc)"))
-        #expect(source.contains(".frame(width: IndentPopUpButton.toolbarWidth, height: 22)"))
+        #expect(!source.contains("IndentPopUpButton"))
+        #expect(!source.contains("IndentPopUpButton.swift"))
+        #expect(!FileManager.default.fileExists(atPath: popupURL.path))
         #expect(!source.contains("Picker(\"Indent\""))
         #expect(!source.contains("indentMenu(for:"))
-        #expect(!source.contains("Minify JSON\"\n            .help(\"Minify JSON\")\n\n            if let doc"))
-        #expect(popupSource.contains("NSPopUpButton"))
-        #expect(popupSource.contains("static let toolbarWidth: CGFloat = 100"))
-        #expect(popupSource.contains("controlSize = .small"))
-        #expect(popupSource.contains("option.label"))
-        #expect(popupSource.contains("document.indent"))
     }
 
     @Test func allIndentOptionsHaveVisibleEnglishTitles() {
@@ -67,12 +60,14 @@ struct ToolbarViewTests {
     @Test func jsonTransformButtonsUsePairedStructureIcons() throws {
         let source = try toolbarSource()
 
-        #expect(source.contains("JSONTransformIconShape(kind: .formatted)"))
-        #expect(source.contains("JSONTransformIconShape(kind: .minified)"))
+        #expect(source.contains("toolbarJSONTransformButton(\"Format\", kind: .formatted"))
+        #expect(source.contains("toolbarJSONTransformButton(\"Minify\", kind: .minified"))
+        #expect(source.contains("JSONTransformIconShape(kind: kind)"))
         #expect(source.contains("case formatted"))
         #expect(source.contains("case minified"))
         #expect(source.contains("workspace.activeDocument?.format()"))
         #expect(source.contains("workspace.activeDocument?.minify()"))
+        #expect(source.contains(".labelStyle(ToolbarIconLabelStyle(showsText: showsToolbarText))"))
         #expect(!source.contains("Label(\"格式化\", systemImage: \"text.alignleft\")"))
         #expect(!source.contains("Label(\"压缩\", systemImage: \"text.aligncenter\")"))
     }
@@ -122,6 +117,9 @@ struct ToolbarViewTests {
         #expect(source.contains("private enum ToolbarMetrics"))
         #expect(source.contains("static let searchFieldWidth: CGFloat = 140"))
         #expect(source.contains("static let controlSpacing: CGFloat = 6"))
+        #expect(source.contains("static let hideTextBelowWidth: CGFloat = 780"))
+        #expect(source.contains("static let iconCanvas: CGFloat = 18"))
+        #expect(source.contains("static let labelColumnWidth: CGFloat = 42"))
     }
 
     /// 验证工具栏图标文字使用上下布局，并支持通过持久化开关隐藏文字。
@@ -131,13 +129,16 @@ struct ToolbarViewTests {
         let source = try toolbarSource()
 
         #expect(source.contains("@AppStorage(\"toolbarShowsText\")"))
+        #expect(source.contains("private var showsToolbarText: Bool"))
+        #expect(source.contains("windowWidth >= ToolbarMetrics.hideTextBelowWidth"))
         #expect(source.contains("private struct ToolbarIconLabelStyle: LabelStyle"))
         #expect(source.contains("Label(title, systemImage: systemImage)"))
-        #expect(source.contains(".labelStyle(ToolbarIconLabelStyle(showsText: toolbarShowsText))"))
+        #expect(source.contains(".labelStyle(ToolbarIconLabelStyle(showsText: showsToolbarText))"))
         #expect(source.contains("VStack(spacing: 2)"))
         #expect(source.contains("if showsText"))
         #expect(source.contains("configuration.title"))
-        #expect(source.contains(".frame(width: 42, height: showsText ? 42 : 30"))
+        #expect(source.contains("ToolbarMetrics.labelHeightWithText"))
+        #expect(source.contains("ToolbarMetrics.labelHeightIconOnly"))
         #expect(!source.contains(".labelStyle(.titleAndIcon)"))
         #expect(!source.contains(".labelStyle(.iconOnly)"))
     }
@@ -164,6 +165,21 @@ struct ToolbarViewTests {
         #expect(source.contains("toolbarIconButton(\"Import\", systemImage: \"square.and.arrow.down\")"))
         #expect(source.contains("toolbarIconLabel(\"Export\", systemImage: \"square.and.arrow.up\")"))
         #expect(source.contains("Label(title, systemImage: systemImage)"))
+    }
+
+    /// 验证主窗口会把可用宽度传给工具栏，以便先隐藏文字再依赖系统溢出。
+    ///
+    /// - Throws: 无法读取 ContentView 源码时抛出文件读取错误。
+    @Test func contentViewPassesWindowWidthToToolbar() throws {
+        let sourceURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/DotJSON/Views/ContentView.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+
+        #expect(source.contains("MainWindowContentWidthKey"))
+        #expect(source.contains("ToolbarView(windowWidth: mainWindowContentWidth)"))
     }
 
     /// 验证 ContentView 现在承载了树面板搜索框，包括 Enter 提交处理。

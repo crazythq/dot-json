@@ -5,57 +5,35 @@ import DotJSONCore
 private enum ToolbarMetrics {
     static let searchFieldWidth: CGFloat = 140
     static let controlSpacing: CGFloat = 6
+    static let iconCanvas: CGFloat = 18
+    static let labelColumnWidth: CGFloat = 42
+    static let labelHeightWithText: CGFloat = 42
+    static let labelHeightIconOnly: CGFloat = 30
+    static let transformStrokeWidth: CGFloat = 1.35
+    /// Below this content width, hide icon captions before relying on toolbar overflow.
+    static let hideTextBelowWidth: CGFloat = 780
 }
 
 struct ToolbarView: ToolbarContent {
+    /// Main editor width; used to hide captions on narrow windows before toolbar overflow.
+    var windowWidth: CGFloat = .greatestFiniteMagnitude
+
     @Environment(WorkspaceViewModel.self) private var workspace
     @AppStorage("toolbarShowsText") private var toolbarShowsText: Bool = true
+
+    private var showsToolbarText: Bool {
+        toolbarShowsText && windowWidth >= ToolbarMetrics.hideTextBelowWidth
+    }
 
     var body: some ToolbarContent {
         // ── Left group ──
         ToolbarItemGroup {
-            Button(action: { workspace.activeDocument?.format() }) {
-                Label {
-                    Text("Format")
-                } icon: {
-                    JSONTransformIconShape(kind: .formatted)
-                        .stroke(
-                            style: StrokeStyle(
-                                lineWidth: 1.35,
-                                lineCap: .round,
-                                lineJoin: .round
-                            )
-                        )
-                        .frame(width: 18, height: 18)
-                        .accessibilityHidden(true)
-                }
+            toolbarJSONTransformButton("Format", kind: .formatted, help: "Format JSON") {
+                workspace.activeDocument?.format()
             }
-            .help("Format JSON")
 
-            Button(action: { workspace.activeDocument?.minify() }) {
-                Label {
-                    Text("Minify")
-                } icon: {
-                    JSONTransformIconShape(kind: .minified)
-                        .stroke(
-                            style: StrokeStyle(
-                                lineWidth: 1.35,
-                                lineCap: .round,
-                                lineJoin: .round
-                            )
-                        )
-                        .frame(width: 18, height: 18)
-                        .accessibilityHidden(true)
-                }
-            }
-            .help("Minify JSON")
-        }
-
-        ToolbarItem(placement: .automatic) {
-            if let doc = workspace.activeDocument {
-                IndentPopUpButton(document: doc)
-                    .frame(width: IndentPopUpButton.toolbarWidth, height: 22)
-                    .help("Indent: 2 spaces / 4 spaces / Tab")
+            toolbarJSONTransformButton("Minify", kind: .minified, help: "Minify JSON") {
+                workspace.activeDocument?.minify()
             }
         }
 
@@ -133,6 +111,41 @@ struct ToolbarView: ToolbarContent {
         }
     }
 
+    private func toolbarJSONTransformButton(
+        _ title: String,
+        kind: JSONTransformIconShape.Kind,
+        help: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Label {
+                Text(title)
+            } icon: {
+                jsonTransformIcon(kind: kind)
+            }
+            .labelStyle(ToolbarIconLabelStyle(showsText: showsToolbarText))
+            .contentShape(Rectangle())
+            .contextMenu {
+                Toggle("Show Text", isOn: $toolbarShowsText)
+            }
+        }
+        .help(help)
+        .controlSize(.large)
+    }
+
+    private func jsonTransformIcon(kind: JSONTransformIconShape.Kind) -> some View {
+        JSONTransformIconShape(kind: kind)
+            .stroke(
+                style: StrokeStyle(
+                    lineWidth: ToolbarMetrics.transformStrokeWidth,
+                    lineCap: .round,
+                    lineJoin: .round
+                )
+            )
+            .frame(width: ToolbarMetrics.iconCanvas, height: ToolbarMetrics.iconCanvas)
+            .accessibilityHidden(true)
+    }
+
     private func toolbarIconButton(
         _ title: String,
         systemImage: String,
@@ -147,7 +160,7 @@ struct ToolbarView: ToolbarContent {
 
     private func toolbarIconLabel(_ title: String, systemImage: String) -> some View {
         Label(title, systemImage: systemImage)
-            .labelStyle(ToolbarIconLabelStyle(showsText: toolbarShowsText))
+            .labelStyle(ToolbarIconLabelStyle(showsText: showsToolbarText))
             .contentShape(Rectangle())
             .contextMenu {
                 Toggle("Show Text", isOn: $toolbarShowsText)
@@ -290,7 +303,11 @@ private struct ToolbarIconLabelStyle: LabelStyle {
         VStack(spacing: 2) {
             configuration.icon
                 .font(.system(size: 15, weight: .regular))
-                .frame(width: 18, height: 18, alignment: .center)
+                .frame(
+                    width: ToolbarMetrics.iconCanvas,
+                    height: ToolbarMetrics.iconCanvas,
+                    alignment: .center
+                )
 
             if showsText {
                 configuration.title
@@ -299,6 +316,12 @@ private struct ToolbarIconLabelStyle: LabelStyle {
             }
         }
         .foregroundStyle(.primary)
-        .frame(width: 42, height: showsText ? 42 : 30, alignment: .center)
+        .frame(
+            width: ToolbarMetrics.labelColumnWidth,
+            height: showsText
+                ? ToolbarMetrics.labelHeightWithText
+                : ToolbarMetrics.labelHeightIconOnly,
+            alignment: .center
+        )
     }
 }
