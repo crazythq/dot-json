@@ -25,10 +25,10 @@ struct ContentView: View {
             if let doc = workspace.activeDocument {
                 HSplitView {
                     TextEditorView()
-                        .frame(minWidth: 300)
+                        .frame(minWidth: 10)
                         .background(Color(hex: "#1e1e1e"))
                     treePanel
-                        .frame(minWidth: 200)
+                        .frame(minWidth: 10)
                         .background(Color(hex: "#252526"))
                 }
                 .dropDestination(for: URL.self) { urls, _ in

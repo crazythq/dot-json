@@ -57,19 +57,17 @@ struct ToolbarViewTests {
         #expect(JSONFormatter.Indent.tab.label == "Tab")
     }
 
-    @Test func jsonTransformButtonsUsePairedStructureIcons() throws {
+    @Test func formatAndMinifyUseStandaloneToolbarItemsWithSystemImages() throws {
         let source = try toolbarSource()
 
-        #expect(source.contains("toolbarJSONTransformButton(\"Format\", kind: .formatted"))
-        #expect(source.contains("toolbarJSONTransformButton(\"Minify\", kind: .minified"))
-        #expect(source.contains("JSONTransformIconShape(kind: kind)"))
-        #expect(source.contains("case formatted"))
-        #expect(source.contains("case minified"))
+        #expect(source.contains("toolbarIconButton(\"Format\", systemImage: \"text.alignleft\")"))
+        #expect(source.contains("toolbarIconButton(\"Minify\", systemImage: \"text.aligncenter\")"))
         #expect(source.contains("workspace.activeDocument?.format()"))
         #expect(source.contains("workspace.activeDocument?.minify()"))
-        #expect(source.contains(".labelStyle(ToolbarIconLabelStyle(showsText: showsToolbarText))"))
-        #expect(!source.contains("Label(\"格式化\", systemImage: \"text.alignleft\")"))
-        #expect(!source.contains("Label(\"压缩\", systemImage: \"text.aligncenter\")"))
+        #expect(!source.contains("ToolbarItemGroup"))
+        #expect(!source.contains("ControlGroup"))
+        #expect(!source.contains("JSONTransformIconShape"))
+        #expect(!source.contains("toolbarJSONTransformButton"))
     }
 
     /// 验证工具栏提供单文件 JSON 导入入口，并复用工作区的统一文档打开入口。
@@ -85,16 +83,16 @@ struct ToolbarViewTests {
         #expect(source.contains("ws.openDocuments(panel.urls)"))
     }
 
-    /// 验证导入和导出入口保留在同一个原生工具栏分组中。
+    /// 验证导入和导出入口各自为独立 ToolbarItem（无 ControlGroup 半框）。
     ///
     /// - Throws: 无法读取工具栏源码时抛出文件读取错误。
-    @Test func importAndExportShareToolbarGroup() throws {
+    @Test func importAndExportAreSeparateToolbarItems() throws {
         let source = try toolbarSource()
 
-        #expect(source.contains("// ── 导入/导出 ──\n        ToolbarItem {"))
-        #expect(source.contains("ControlGroup {"))
+        #expect(source.contains("// ── 导入/导出 ──"))
         #expect(source.contains("toolbarIconButton(\"Import\", systemImage: \"square.and.arrow.down\")"))
         #expect(source.contains("toolbarIconLabel(\"Export\", systemImage: \"square.and.arrow.up\")"))
+        #expect(!source.contains("ControlGroup {"))
     }
 
     /// 验证搜索已从工具栏移除，不再使用 toolbar principal 占位和原生搜索控件。
@@ -118,29 +116,29 @@ struct ToolbarViewTests {
         #expect(source.contains("static let searchFieldWidth: CGFloat = 140"))
         #expect(source.contains("static let controlSpacing: CGFloat = 6"))
         #expect(source.contains("static let hideTextBelowWidth: CGFloat = 780"))
-        #expect(source.contains("static let iconCanvas: CGFloat = 18"))
-        #expect(source.contains("static let labelColumnWidth: CGFloat = 42"))
+        #expect(source.contains("static let symbolPointSize: CGFloat = 14"))
+        #expect(source.contains("static let iconOnlyHitSize: CGFloat = 28"))
     }
 
-    /// 验证工具栏图标文字使用上下布局，并支持通过持久化开关隐藏文字。
+    /// 验证工具栏使用横向 titleAndIcon 与 padded iconOnly，并支持通过持久化开关隐藏文字。
     ///
     /// - Throws: 无法读取工具栏源码时抛出文件读取错误。
-    @Test func toolbarIconTitlesStackBelowIconsAndCanBeHidden() throws {
+    @Test func toolbarUsesHorizontalTitleAndIconOrPaddedIconOnly() throws {
         let source = try toolbarSource()
 
         #expect(source.contains("@AppStorage(\"toolbarShowsText\")"))
         #expect(source.contains("private var showsToolbarText: Bool"))
         #expect(source.contains("windowWidth >= ToolbarMetrics.hideTextBelowWidth"))
-        #expect(source.contains("private struct ToolbarIconLabelStyle: LabelStyle"))
+        #expect(source.contains("private struct ToolbarAdaptiveLabelStyle: LabelStyle"))
         #expect(source.contains("Label(title, systemImage: systemImage)"))
-        #expect(source.contains(".labelStyle(ToolbarIconLabelStyle(showsText: showsToolbarText))"))
-        #expect(source.contains("VStack(spacing: 2)"))
+        #expect(source.contains(".labelStyle(ToolbarAdaptiveLabelStyle(showsText: showsToolbarText))"))
+        #expect(source.contains("HStack(spacing: ToolbarMetrics.titleAndIconSpacing)"))
         #expect(source.contains("if showsText"))
         #expect(source.contains("configuration.title"))
-        #expect(source.contains("ToolbarMetrics.labelHeightWithText"))
-        #expect(source.contains("ToolbarMetrics.labelHeightIconOnly"))
-        #expect(!source.contains(".labelStyle(.titleAndIcon)"))
-        #expect(!source.contains(".labelStyle(.iconOnly)"))
+        #expect(source.contains("ToolbarMetrics.iconOnlyPadding"))
+        #expect(source.contains(".foregroundStyle(.primary)"))
+        #expect(!source.contains("VStack(spacing: 2)"))
+        #expect(!source.contains("ToolbarIconLabelStyle"))
     }
 
     /// 验证工具栏自定义标签保留原生 Label 语义，让 macOS 溢出菜单自己绘制居中文字。
@@ -180,6 +178,21 @@ struct ToolbarViewTests {
 
         #expect(source.contains("MainWindowContentWidthKey"))
         #expect(source.contains("ToolbarView(windowWidth: mainWindowContentWidth)"))
+    }
+
+    /// 验证左右分栏最小宽度为 10pt，便于拖到极窄仍可调回。
+    ///
+    /// - Throws: 无法读取 ContentView 源码时抛出文件读取错误。
+    @Test func splitPanesAllowTenPointMinimumWidth() throws {
+        let sourceURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/DotJSON/Views/ContentView.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+
+        #expect(source.contains("TextEditorView()\n                        .frame(minWidth: 10)"))
+        #expect(source.contains("treePanel\n                        .frame(minWidth: 10)"))
     }
 
     /// 验证 ContentView 现在承载了树面板搜索框，包括 Enter 提交处理。
