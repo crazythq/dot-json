@@ -10,6 +10,8 @@ private final class MockDefaultApplicationWorkspace: DefaultApplicationWorkspace
     var hardFailSetFor: Set<ManagedJSONExtension> = []
     /// Hard-fail budget per extension (default 1 when in `hardFailSetFor`). Rollback uses the same API.
     var hardFailBudget: [ManagedJSONExtension: Int] = [:]
+    /// How many upcoming hard-fails may mutate `defaults` before throwing (default 1).
+    var hardFailMutatingBudget: [ManagedJSONExtension: Int] = [:]
     var userCancelSetFor: Set<ManagedJSONExtension> = []
     var workspaceCandidateURL: URL?
 
@@ -30,7 +32,11 @@ private final class MockDefaultApplicationWorkspace: DefaultApplicationWorkspace
             if remaining > 0 {
                 hardFailBudget[ext] = remaining - 1
                 setCalls.append((appURL, ext))
-                defaults[ext] = appURL
+                let mutatingLeft = hardFailMutatingBudget[ext] ?? 1
+                if mutatingLeft > 0 {
+                    defaults[ext] = appURL
+                    hardFailMutatingBudget[ext] = mutatingLeft - 1
+                }
                 throw DefaultApplicationWorkspaceError.setFailed(underlyingDescription: "mock hard failure")
             }
         }
@@ -158,6 +164,7 @@ struct FileAssociationCoordinatorTests {
         workspace.defaults[.json] = vscode
         workspace.hardFailSetFor = [.json]
         workspace.hardFailBudget[.json] = 2
+        workspace.hardFailMutatingBudget[.json] = 1
         let suite = "FileAssociationCoordinatorTests.hardRollback"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
