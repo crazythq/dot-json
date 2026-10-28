@@ -31,6 +31,8 @@ struct FileAssociationSettingsTests {
         #expect(!settingsSource.contains("Open .json files with DotJSON"))
         #expect(!settingsSource.contains("Associate"))
         #expect(!settingsSource.contains("Handler"))
+        #expect(!settingsSource.contains("confirmDisable"))
+        #expect(!settingsSource.contains("Restore Previous App"))
         #expect(!settingsSource.contains("Section(\"General\")"))
         #expect(!settingsSource.contains("Section(\"Editor\")"))
     }

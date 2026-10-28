@@ -78,25 +78,18 @@ struct SettingsView: View {
     }
 
     private func turnOff(_ ext: ManagedJSONExtension) {
-        FileAssociationAlerts.confirmDisable(
-            for: ext,
-            onConfirm: {
-                busyExtensions.insert(ext)
-                Task {
-                    let outcome = await coordinator.disableDotJSONAsDefault(for: ext)
-                    syncToggle(for: ext)
-                    busyExtensions.remove(ext)
-                    if case .restoreFailed = outcome {
-                        FileAssociationAlerts.showDisableFailure(for: ext, offerReset: true) {
-                            runReset(for: ext)
-                        }
-                    }
+        guard !busyExtensions.contains(ext) else { return }
+        busyExtensions.insert(ext)
+        Task {
+            let outcome = await coordinator.disableDotJSONAsDefault(for: ext)
+            syncToggle(for: ext)
+            busyExtensions.remove(ext)
+            if case .restoreFailed = outcome {
+                FileAssociationAlerts.showDisableFailure(for: ext, offerReset: true) {
+                    runReset(for: ext)
                 }
-            },
-            onCancel: {
-                syncToggle(for: ext)
             }
-        )
+        }
     }
 
     private func runReset(for ext: ManagedJSONExtension) {

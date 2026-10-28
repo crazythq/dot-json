@@ -94,27 +94,6 @@ enum FileAssociationAlerts {
         }
     }
 
-    static func confirmDisable(
-        for ext: ManagedJSONExtension,
-        onConfirm: @escaping () -> Void,
-        onCancel: (() -> Void)? = nil
-    ) {
-        presentAlert(
-            title: "Stop opening .\(ext.rawValue) with DotJSON?",
-            message:
-                "This will restore the app that opened .\(ext.rawValue) files before you turned this on.",
-            informativeText: nil,
-            buttons: ["Cancel", "Restore Previous App"],
-            defaultButtonIndex: 1
-        ) { response in
-            if response == .alertSecondButtonReturn {
-                onConfirm()
-            } else {
-                onCancel?()
-            }
-        }
-    }
-
     static func openSystemSettingsIfPossible() {
         let candidates = [
             "x-apple.systempreferences:com.apple.Default-Apps-Settings.extension",
