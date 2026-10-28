@@ -2,7 +2,7 @@ import Foundation
 import DotJSONCore
 
 /// UserDefaults-backed app preferences (injectable suite for tests).
-struct AppPreferences: Sendable {
+struct AppPreferences {
     enum StorageKey {
         static let restoreSession = "dotjson.restoreSession"
         static let defaultIndent = "dotjson.defaultIndent"
