@@ -255,7 +255,7 @@ final class EditorViewModel: Identifiable {
     }
 
     /// Format/repair after load; disk snapshot stays in `savedText` so formatting marks the tab dirty when it changes text.
-    private func applyFormatOnOpen() {
+    func applyFormatOnOpen() {
         let diskText = savedText
         if let formatted = try? formattedOrRepaired(diskText) {
             rawText = formatted

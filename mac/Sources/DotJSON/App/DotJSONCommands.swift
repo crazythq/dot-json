@@ -40,10 +40,6 @@ struct DotJSONCommands: Commands {
                             loadDocument(from: url)
                         }
                     }
-                    Divider()
-                    Button("Clear Menu") {
-                        workspace?.clearRecentFiles()
-                    }
                 }
             }
         }

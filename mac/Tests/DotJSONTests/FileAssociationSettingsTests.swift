@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-/// Structural checks for minimal Settings scope (Files toggle only).
+/// Structural checks for Settings (General, Editor, Files).
 struct FileAssociationSettingsTests {
     /// `mac/` package root from this test file (`Tests/DotJSONTests/...`).
     private func macPackageRoot() -> URL {
@@ -33,8 +33,8 @@ struct FileAssociationSettingsTests {
         #expect(!settingsSource.contains("Handler"))
         #expect(!settingsSource.contains("confirmDisable"))
         #expect(!settingsSource.contains("Restore Previous App"))
-        #expect(!settingsSource.contains("Section(\"General\")"))
-        #expect(!settingsSource.contains("Section(\"Editor\")"))
+        #expect(settingsSource.contains("Section(\"General\")"))
+        #expect(settingsSource.contains("Section(\"Editor\")"))
     }
 
     @Test func infoPlistDeclaresJsonlWithoutOwningPublicJsonl() throws {
