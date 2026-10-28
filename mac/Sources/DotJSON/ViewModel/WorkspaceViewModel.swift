@@ -12,6 +12,9 @@ final class WorkspaceViewModel {
         static let workspaceState = "dotjson.workspaceState"
     }
 
+    private let userDefaults: UserDefaults
+    private let preferences: AppPreferences
+
     private struct SessionSnapshot: Codable {
         let fileURLs: [String]
         let activeIndex: Int
@@ -46,9 +49,32 @@ final class WorkspaceViewModel {
     var activeErrorLineNumber: Int { activeDocument?.errorLineNumber ?? 0 }
     var activeErrorMessage: String? { activeDocument?.errorMessage }
 
-    init() {
+    init(userDefaults: UserDefaults = .standard) {
+        self.userDefaults = userDefaults
+        self.preferences = AppPreferences(defaults: userDefaults)
         Self.shared = self
         restoreSession()
+    }
+
+    /// Applies default indent and paste formatting preference to a new editor tab.
+    func applyNewDocumentDefaults(to vm: EditorViewModel) {
+        vm.indent = preferences.defaultIndent
+        vm.autoFormatOnPaste = preferences.formatOnPaste
+    }
+
+    /// When Format on Open is enabled in Settings, reformat open file tabs from their on-disk snapshot.
+    func syncFormatOnOpenToOpenTabs(enabled: Bool) {
+        guard enabled else { return }
+        for tab in tabs where tab.fileURL != nil {
+            tab.applyFormatOnOpen()
+        }
+    }
+
+    /// Keeps paste formatting in sync when the Settings toggle changes.
+    func syncFormatOnPasteToOpenTabs(_ enabled: Bool) {
+        for tab in tabs {
+            tab.autoFormatOnPaste = enabled
+        }
     }
 
     // MARK: - Tab Management
@@ -59,6 +85,7 @@ final class WorkspaceViewModel {
             return
         }
         let vm = EditorViewModel()
+        applyNewDocumentDefaults(to: vm)
         vm.untitledNumber = nextUntitledNumber
         nextUntitledNumber += 1
         tabs.append(vm)
@@ -117,7 +144,8 @@ final class WorkspaceViewModel {
         }
 
         let vm = EditorViewModel()
-        try vm.loadDocument(from: url)
+        applyNewDocumentDefaults(to: vm)
+        try vm.loadDocument(from: url, formatOnOpen: preferences.formatOnOpen)
         tabs.append(vm)
         activeTabIndex = tabs.count - 1
         addRecent(url)
@@ -397,7 +425,8 @@ final class WorkspaceViewModel {
         if canReplaceUniqueCleanUntitledTab() {
             do {
                 let vm = tabs[0]
-                try vm.loadDocument(from: url)
+                applyNewDocumentDefaults(to: vm)
+                try vm.loadDocument(from: url, formatOnOpen: preferences.formatOnOpen)
                 addRecent(url)
                 persistSession()
                 return
@@ -542,7 +571,7 @@ final class WorkspaceViewModel {
             recentFiles: recentFiles.map { $0.path }
         )
         if let data = try? JSONEncoder().encode(snapshot) {
-            UserDefaults.standard.set(data, forKey: Key.workspaceState)
+            userDefaults.set(data, forKey: Key.workspaceState)
         }
     }
 
@@ -550,7 +579,7 @@ final class WorkspaceViewModel {
     private func restoreSession() {
         defer { isRestoringSession = false }
 
-        guard let data = UserDefaults.standard.data(forKey: Key.workspaceState),
+        guard let data = userDefaults.data(forKey: Key.workspaceState),
               let snapshot = try? JSONDecoder().decode(SessionSnapshot.self, from: data) else {
             newTab()
             return
@@ -558,6 +587,11 @@ final class WorkspaceViewModel {
 
         recentFiles = snapshot.recentFiles.compactMap { URL(fileURLWithPath: $0) }
             .filter { FileManager.default.fileExists(atPath: $0.path) }
+
+        guard preferences.restoreSession else {
+            newTab()
+            return
+        }
 
         let urls = snapshot.fileURLs.map { URL(fileURLWithPath: $0) }
             .filter { !$0.path.isEmpty && FileManager.default.fileExists(atPath: $0.path) }
@@ -569,7 +603,9 @@ final class WorkspaceViewModel {
 
         for url in urls {
             let vm = EditorViewModel()
+            applyNewDocumentDefaults(to: vm)
             do {
+                // Session restore never applies Format on Open (regardless of user preference).
                 try vm.loadDocument(from: url, formatOnOpen: false)
                 tabs.append(vm)
             } catch {

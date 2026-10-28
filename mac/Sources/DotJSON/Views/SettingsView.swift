@@ -1,4 +1,5 @@
 import SwiftUI
+import DotJSONCore
 
 struct SettingsView: View {
     @State private var coordinator = FileAssociationCoordinator()
@@ -6,8 +7,61 @@ struct SettingsView: View {
     @State private var openJSONL = false
     @State private var busyExtensions: Set<ManagedJSONExtension> = []
 
+    @AppStorage(AppPreferences.StorageKey.restoreSession)
+    private var restoreSession: Bool = true
+
+    @AppStorage(AppPreferences.StorageKey.formatOnOpen)
+    private var formatOnOpen: Bool = true
+
+    @AppStorage(AppPreferences.StorageKey.formatOnPaste)
+    private var formatOnPaste: Bool = true
+
+    @AppStorage(AppPreferences.StorageKey.defaultIndent)
+    private var defaultIndentRaw: String = AppPreferences.DefaultIndentEncoding.fourSpaces.rawValue
+
     var body: some View {
         Form {
+            Section("General") {
+                Toggle(isOn: $restoreSession) {
+                    SettingsToggleLabels(
+                        title: "Restore Session",
+                        subtitle: "Reopen tabs from your last session when DotJSON launches. Recent files are always kept, even when this is off."
+                    )
+                }
+
+                Button("Clear Recent Files") {
+                    WorkspaceViewModel.shared?.clearRecentFiles()
+                }
+            }
+
+            Section("Editor") {
+                Picker("Default Indent", selection: $defaultIndentRaw) {
+                    Text("2 Spaces").tag(AppPreferences.DefaultIndentEncoding.twoSpaces.rawValue)
+                    Text("4 Spaces").tag(AppPreferences.DefaultIndentEncoding.fourSpaces.rawValue)
+                    Text("Tab").tag(AppPreferences.DefaultIndentEncoding.tab.rawValue)
+                }
+
+                Toggle(isOn: $formatOnOpen) {
+                    SettingsToggleLabels(
+                        title: "Format on Open",
+                        subtitle: "Format JSON when you open a file. Restoring a saved session never formats tabs."
+                    )
+                }
+                .onChange(of: formatOnOpen) { _, enabled in
+                    WorkspaceViewModel.shared?.syncFormatOnOpenToOpenTabs(enabled: enabled)
+                }
+
+                Toggle(isOn: $formatOnPaste) {
+                    SettingsToggleLabels(
+                        title: "Format on Paste",
+                        subtitle: "Automatically format pasted JSON in the editor."
+                    )
+                }
+                .onChange(of: formatOnPaste) { _, enabled in
+                    WorkspaceViewModel.shared?.syncFormatOnPasteToOpenTabs(enabled)
+                }
+            }
+
             Section("Files") {
                 Toggle(isOn: binding(for: .json)) {
                     FileAssociationToggleLabels(
@@ -27,7 +81,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 420, height: 168)
+        .frame(minWidth: 420, minHeight: 360)
         .onAppear {
             syncTogglesFromSystem()
         }
@@ -104,6 +158,20 @@ struct SettingsView: View {
             case .failure:
                 FileAssociationAlerts.showResetFailure(for: ext)
             }
+        }
+    }
+}
+
+private struct SettingsToggleLabels: View {
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+            Text(subtitle)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
         }
     }
 }

@@ -6,7 +6,11 @@ import Foundation
 struct RecentFilesTests {
 
     @Test func initiallyEmpty() {
-        let ws = WorkspaceViewModel()
+        let suite = "RecentFilesTests.empty.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        defaults.removeObject(forKey: "dotjson.workspaceState")
+        let ws = WorkspaceViewModel(userDefaults: defaults)
         #expect(ws.recentFiles.isEmpty)
     }
 
