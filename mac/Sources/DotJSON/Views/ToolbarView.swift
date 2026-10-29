@@ -110,7 +110,9 @@ struct ToolbarView: ToolbarContent {
             } label: {
                 toolbarMenuActionLabel("Export", systemImage: "square.and.arrow.up")
             }
-            .menuStyle(ToolbarActionMenuStyle())
+            .menuStyle(.borderlessButton)
+            .buttonStyle(ToolbarActionButtonStyle())
+            .menuIndicator(.hidden)
             .help("Export JSON")
         }
     }
@@ -290,14 +292,5 @@ private struct ToolbarActionButtonStyle: ButtonStyle {
                 RoundedRectangle(cornerRadius: ToolbarMetrics.actionCornerRadius, style: .continuous)
                     .strokeBorder(Color.primary.opacity(0.2), lineWidth: 0.5)
             }
-    }
-}
-
-/// Menu actions use the same bordered vertical face as plain toolbar buttons.
-private struct ToolbarActionMenuStyle: MenuStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        Menu(configuration)
-            .buttonStyle(ToolbarActionButtonStyle())
-            .menuIndicator(.hidden)
     }
 }
