@@ -320,7 +320,9 @@ final class ToolbarVerticalMenuHostView: NSView {
     override func mouseDown(with event: NSEvent) {
         guard event.type == .leftMouseDown, let coordinator else { return }
         let menu = coordinator.makeMenu()
-        let location = NSPoint(x: bounds.midX, y: bounds.minY)
+        // View is flipped (y=0 at top). Anchor the menu's top-left to the button's
+        // bottom-left so the dropdown opens *below* the control, not over it.
+        let location = NSPoint(x: bounds.minX, y: bounds.maxY)
         menu.popUp(positioning: nil, at: location, in: self)
     }
 }
