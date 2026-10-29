@@ -72,8 +72,10 @@ struct ToolbarViewTests {
         #expect(source.contains("showsMenuChevron: true"))
         #expect(source.contains("SwiftUI `Menu` ignores custom label chrome in toolbars"))
         #expect(!source.contains("toolbarMenuActionLabel"))
-        #expect(!source.contains("Menu {"))
+        #expect(!source.contains("            Menu {"))
         #expect(!source.contains(".menuStyle(.borderlessButton)"))
+        #expect(source.contains("toolbarVerticalMenuButton("))
+        #expect(source.contains("ToolbarVerticalMenuButton("))
     }
 
     @Test func toolbarProvidesJSONImportAction() throws {
