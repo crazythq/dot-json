@@ -75,7 +75,7 @@ struct ToolbarViewTests {
         #expect(source.contains("showsMenuChevron: true"))
         #expect(source.contains(".menuStyle(.borderlessButton)"))
         #expect(source.contains(".menuIndicator(.hidden)"))
-        #expect(source.contains("Menu would flatten"))
+        #expect(source.contains("horizontal titleAndIcon"))
     }
 
     @Test func toolbarProvidesJSONImportAction() throws {
