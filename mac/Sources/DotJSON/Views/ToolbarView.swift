@@ -47,17 +47,17 @@ struct ToolbarView: ToolbarContent {
 
         ToolbarItem {
             toolbarVerticalMenuButton(
-                title: String(localized: "toolbar.convert", bundle: .module),
+                title: String(localized: "toolbar.convert", bundle: DotJSONResourceBundle.bundle),
                 systemImage: "arrow.left.arrow.right",
-                help: String(localized: "toolbar.convert.help", bundle: .module),
+                help: String(localized: "toolbar.convert.help", bundle: DotJSONResourceBundle.bundle),
                 entries: [
                     ToolbarMenuEntry(
-                        title: String(localized: "toolbar.convert.toPython", bundle: .module)
+                        title: String(localized: "toolbar.convert.toPython", bundle: DotJSONResourceBundle.bundle)
                     ) {
                         workspace.activeDocument?.toPythonLiteral()
                     },
                     ToolbarMenuEntry(
-                        title: String(localized: "toolbar.convert.toJSON", bundle: .module)
+                        title: String(localized: "toolbar.convert.toJSON", bundle: DotJSONResourceBundle.bundle)
                     ) {
                         workspace.activeDocument?.toStandardJSON()
                     },

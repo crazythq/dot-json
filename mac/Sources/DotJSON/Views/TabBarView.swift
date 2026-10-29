@@ -376,28 +376,28 @@ private struct TabBarItemView: View {
         Button {
             closeTabIfPossible()
         } label: {
-            Text("tab.context.closeCurrent", bundle: .module)
+            Text("tab.context.closeCurrent", bundle: DotJSONResourceBundle.bundle)
         }
         Button {
             if let tabIndex { workspace.closeOtherTabs(at: tabIndex) }
         } label: {
-            Text("tab.context.closeOthers", bundle: .module)
+            Text("tab.context.closeOthers", bundle: DotJSONResourceBundle.bundle)
         }
         Button {
             workspace.closeAllTabs()
         } label: {
-            Text("tab.context.closeAll", bundle: .module)
+            Text("tab.context.closeAll", bundle: DotJSONResourceBundle.bundle)
         }
         Divider()
         Button {
             beginRename()
         } label: {
-            Text("tab.context.rename", bundle: .module)
+            Text("tab.context.rename", bundle: DotJSONResourceBundle.bundle)
         }
         Button {
             if let tabIndex { workspace.duplicateTab(at: tabIndex) }
         } label: {
-            Text("tab.context.duplicate", bundle: .module)
+            Text("tab.context.duplicate", bundle: DotJSONResourceBundle.bundle)
         }
         Divider()
         Button {
@@ -405,7 +405,7 @@ private struct TabBarItemView: View {
             let focused = workspace.activeTabIndex
             workspace.presentDiff(focusedTabIndex: focused, otherTabIndex: tabIndex)
         } label: {
-            Text("tab.context.compare", bundle: .module)
+            Text("tab.context.compare", bundle: DotJSONResourceBundle.bundle)
         }
         .disabled({
             guard let tabIndex else { return true }
