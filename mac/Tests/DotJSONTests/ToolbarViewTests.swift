@@ -99,7 +99,7 @@ struct ToolbarViewTests {
         let source = try toolbarSource()
 
         #expect(source.contains("Label(title, systemImage: systemImage)"))
-        #expect(source.contains("setAccessibilityImage(image)"))
+        #expect(source.contains("accessibilityImage = image"))
     }
 
     @Test func contentViewPassesWindowWidthToToolbar() throws {

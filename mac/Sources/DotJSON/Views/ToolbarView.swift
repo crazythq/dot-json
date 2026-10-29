@@ -237,7 +237,7 @@ struct ToolbarVerticalMenuButton: NSViewRepresentable {
         nsView.toolTip = help
         nsView.setAccessibilityLabel(title)
         if let image = NSImage(systemSymbolName: systemImage, accessibilityDescription: title) {
-            nsView.setAccessibilityImage(image)
+            nsView.accessibilityImage = image
         }
     }
 
