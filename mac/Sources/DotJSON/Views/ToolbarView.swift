@@ -14,6 +14,7 @@ private enum ToolbarMetrics {
     static let iconOnlyPadding: CGFloat = 6
     static let iconOnlyHitSize: CGFloat = 28
     static let actionCornerRadius: CGFloat = 6
+    static let menuChevronPointSize: CGFloat = 7
     /// Below this content width, hide icon captions before relying on toolbar overflow.
     static let hideTextBelowWidth: CGFloat = 780
 }
@@ -57,12 +58,14 @@ struct ToolbarView: ToolbarContent {
                     Text("toolbar.convert.toJSON", bundle: .module)
                 }
             } label: {
-                toolbarActionLabel(
+                toolbarMenuActionLabel(
                     String(localized: "toolbar.convert", bundle: .module),
                     systemImage: "arrow.left.arrow.right"
                 )
             }
+            .menuStyle(.borderlessButton)
             .buttonStyle(ToolbarActionButtonStyle())
+            .menuIndicator(.hidden)
             .help(Text("toolbar.convert.help", bundle: .module))
         }
 
@@ -105,9 +108,9 @@ struct ToolbarView: ToolbarContent {
                     export(format: .minified)
                 }
             } label: {
-                toolbarActionLabel("Export", systemImage: "square.and.arrow.up")
+                toolbarMenuActionLabel("Export", systemImage: "square.and.arrow.up")
             }
-            .buttonStyle(ToolbarActionButtonStyle())
+            .menuStyle(ToolbarActionMenuStyle())
             .help("Export JSON")
         }
     }
@@ -124,6 +127,7 @@ struct ToolbarView: ToolbarContent {
         .accessibilityLabel(title)
     }
 
+    /// Plain `Button` label — keeps `Label` so overflow `>>` rows retain SF Symbol icons.
     private func toolbarActionLabel(_ title: String, systemImage: String) -> some View {
         Label(title, systemImage: systemImage)
             .labelStyle(ToolbarActionLabelStyle(showsText: showsToolbarText))
@@ -131,6 +135,29 @@ struct ToolbarView: ToolbarContent {
             .contextMenu {
                 Toggle("Show Text", isOn: $toolbarShowsText)
             }
+    }
+
+    /// `Menu` label — custom vertical face; `Menu` would flatten `Label` to horizontal titleAndIcon.
+    private func toolbarMenuActionLabel(_ title: String, systemImage: String) -> some View {
+        ZStack {
+            Label(title, systemImage: systemImage)
+                .labelStyle(.iconOnly)
+                .frame(width: 0, height: 0)
+                .opacity(0)
+                .accessibilityHidden(true)
+
+            ToolbarActionFace(
+                title: title,
+                systemImage: systemImage,
+                showsText: showsToolbarText,
+                showsMenuChevron: true
+            )
+        }
+        .contentShape(Rectangle())
+        .contextMenu {
+            Toggle("Show Text", isOn: $toolbarShowsText)
+        }
+        .accessibilityLabel(title)
     }
 
     private func pasteFromClipboard() {
@@ -171,6 +198,49 @@ struct ToolbarView: ToolbarContent {
                 doc.reportFileError(error)
             }
         }
+    }
+}
+
+/// Shared vertical toolbar face (icon above caption, or padded icon-only).
+private struct ToolbarActionFace: View {
+    let title: String
+    let systemImage: String
+    let showsText: Bool
+    var showsMenuChevron: Bool = false
+
+    var body: some View {
+        Group {
+            if showsText {
+                VStack(spacing: ToolbarMetrics.verticalIconTitleSpacing) {
+                    Image(systemName: systemImage)
+                        .font(.system(size: ToolbarMetrics.symbolPointSize))
+                        .frame(maxWidth: .infinity, alignment: .center)
+
+                    HStack(spacing: 2) {
+                        Text(title)
+                            .font(.system(size: ToolbarMetrics.captionPointSize))
+                            .lineLimit(1)
+                        if showsMenuChevron {
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: ToolbarMetrics.menuChevronPointSize, weight: .semibold))
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
+                }
+                .padding(.horizontal, ToolbarMetrics.verticalHorizontalPadding)
+                .padding(.vertical, ToolbarMetrics.verticalVerticalPadding)
+                .frame(minHeight: ToolbarMetrics.verticalButtonMinHeight)
+            } else {
+                Image(systemName: systemImage)
+                    .font(.system(size: ToolbarMetrics.symbolPointSize))
+                    .padding(ToolbarMetrics.iconOnlyPadding)
+                    .frame(
+                        width: ToolbarMetrics.iconOnlyHitSize,
+                        height: ToolbarMetrics.iconOnlyHitSize
+                    )
+            }
+        }
+        .foregroundStyle(.primary)
     }
 }
 
@@ -220,5 +290,14 @@ private struct ToolbarActionButtonStyle: ButtonStyle {
                 RoundedRectangle(cornerRadius: ToolbarMetrics.actionCornerRadius, style: .continuous)
                     .strokeBorder(Color.primary.opacity(0.2), lineWidth: 0.5)
             }
+    }
+}
+
+/// Menu actions use the same bordered vertical face as plain toolbar buttons.
+private struct ToolbarActionMenuStyle: MenuStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        Menu(configuration)
+            .buttonStyle(ToolbarActionButtonStyle())
+            .menuIndicator(.hidden)
     }
 }

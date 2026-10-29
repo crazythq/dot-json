@@ -42,12 +42,12 @@ struct ToolbarViewTests {
 
         #expect(source.contains("toolbarActionButton(\"Format\", systemImage: \"text.alignleft\")"))
         #expect(source.contains("toolbarActionButton(\"Minify\", systemImage: \"text.aligncenter\")"))
-        #expect(source.contains("toolbarActionLabel(\n                    String(localized: \"toolbar.convert\""))
+        #expect(source.contains("toolbarMenuActionLabel(\n                    String(localized: \"toolbar.convert\""))
+        #expect(source.contains("toolbarMenuActionLabel(\"Export\", systemImage: \"square.and.arrow.up\")"))
         #expect(source.contains("toolbarActionButton(\"Clear\", systemImage: \"trash\")"))
         #expect(source.contains("toolbarActionButton(\"Paste\", systemImage: \"doc.on.clipboard\")"))
         #expect(source.contains("toolbarActionButton(\"Copy\", systemImage: \"doc.on.doc\")"))
         #expect(source.contains("toolbarActionButton(\"Import\", systemImage: \"square.and.arrow.down\")"))
-        #expect(source.contains("toolbarActionLabel(\"Export\", systemImage: \"square.and.arrow.up\")"))
         #expect(!source.contains("ControlGroup"))
         #expect(!source.contains("ToolbarItemGroup"))
         #expect(!source.contains(".labelStyle(.titleAndIcon)"))
@@ -65,6 +65,17 @@ struct ToolbarViewTests {
         #expect(source.contains("static let verticalButtonMinHeight: CGFloat = 38"))
         #expect(source.contains("private struct ToolbarActionButtonStyle: ButtonStyle"))
         #expect(!source.contains("HStack(spacing: ToolbarMetrics.titleAndIconSpacing)"))
+    }
+
+    @Test func convertAndExportMenusUseVerticalMenuLabels() throws {
+        let source = try toolbarSource()
+
+        #expect(source.contains("private func toolbarMenuActionLabel"))
+        #expect(source.contains("ToolbarActionFace("))
+        #expect(source.contains("showsMenuChevron: true"))
+        #expect(source.contains(".menuStyle(.borderlessButton)"))
+        #expect(source.contains(".menuIndicator(.hidden)"))
+        #expect(source.contains("Menu would flatten"))
     }
 
     @Test func toolbarProvidesJSONImportAction() throws {
