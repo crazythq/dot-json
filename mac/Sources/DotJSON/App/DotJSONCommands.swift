@@ -16,7 +16,7 @@ struct DotJSONCommands: Commands {
 
             Divider()
 
-            Button("Close Tab") { workspace?.closeActiveTab() }
+            Button(closeCommandTitle) { performCloseCommand() }
                 .keyboardShortcut("w", modifiers: .command)
 
             Divider()
@@ -43,6 +43,37 @@ struct DotJSONCommands: Commands {
                 }
             }
         }
+    }
+
+
+    private var closeCommandTitle: String {
+        isSettingsKeyWindow ? "Close" : "Close Tab"
+    }
+
+    private var isSettingsKeyWindow: Bool {
+        guard let window = NSApp.keyWindow else { return false }
+        return Self.isSettingsWindow(window)
+    }
+
+    private func performCloseCommand() {
+        if let window = NSApp.keyWindow, Self.isSettingsWindow(window) {
+            window.performClose(nil)
+            return
+        }
+        workspace?.closeActiveTab()
+    }
+
+    /// SwiftUI `Settings` window titles are typically "Settings" / "Preferences".
+    private static func isSettingsWindow(_ window: NSWindow) -> Bool {
+        let title = window.title
+        if title.localizedCaseInsensitiveContains("Settings") { return true }
+        if title.localizedCaseInsensitiveContains("Preferences") { return true }
+        // Identifier used by some SwiftUI Settings hosts.
+        if let id = window.identifier?.rawValue,
+           id.localizedCaseInsensitiveContains("Settings") {
+            return true
+        }
+        return false
     }
 
     private func openFile() {
