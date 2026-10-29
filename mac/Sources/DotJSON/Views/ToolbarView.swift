@@ -51,12 +51,12 @@ struct ToolbarView: ToolbarContent {
                 systemImage: "arrow.left.arrow.right",
                 help: String(localized: "toolbar.convert.help", bundle: .module),
                 entries: [
-                    ToolbarVerticalMenuButton.Entry(
+                    ToolbarMenuEntry(
                         title: String(localized: "toolbar.convert.toPython", bundle: .module)
                     ) {
                         workspace.activeDocument?.toPythonLiteral()
                     },
-                    ToolbarVerticalMenuButton.Entry(
+                    ToolbarMenuEntry(
                         title: String(localized: "toolbar.convert.toJSON", bundle: .module)
                     ) {
                         workspace.activeDocument?.toStandardJSON()
@@ -101,10 +101,10 @@ struct ToolbarView: ToolbarContent {
                 systemImage: "square.and.arrow.up",
                 help: "Export JSON",
                 entries: [
-                    ToolbarVerticalMenuButton.Entry(title: "Export Formatted JSON") {
+                    ToolbarMenuEntry(title: "Export Formatted JSON") {
                         export(format: .formatted)
                     },
-                    ToolbarVerticalMenuButton.Entry(title: "Export Minified JSON") {
+                    ToolbarMenuEntry(title: "Export Minified JSON") {
                         export(format: .minified)
                     },
                 ]
@@ -134,18 +134,18 @@ struct ToolbarView: ToolbarContent {
             }
     }
 
-    /// AppKit-hosted vertical menu button — SwiftUI `Menu` ignores custom label chrome in toolbars.
+    /// Vertical face via `Label` (so toolbar `>>` keeps title+icon) + AppKit `NSMenu` on click
+    /// (SwiftUI `Menu` would flatten the label to horizontal in the toolbar).
     private func toolbarVerticalMenuButton(
         title: String,
         systemImage: String,
         help: String,
-        entries: [ToolbarVerticalMenuButton.Entry]
+        entries: [ToolbarMenuEntry]
     ) -> some View {
-        ToolbarVerticalMenuButton(
+        ToolbarLabelMenuButton(
             title: title,
             systemImage: systemImage,
             showsText: showsToolbarText,
-            help: help,
             entries: entries,
             toolbarShowsText: $toolbarShowsText
         )
@@ -194,185 +194,101 @@ struct ToolbarView: ToolbarContent {
     }
 }
 
-/// Toolbar menu action with a vertical face and AppKit `NSMenu` (no SwiftUI `Menu` label flattening).
-struct ToolbarVerticalMenuButton: NSViewRepresentable {
-    struct Entry {
-        let title: String
-        let action: () -> Void
-
-        init(title: String, action: @escaping () -> Void) {
-            self.title = title
-            self.action = action
-        }
-    }
-
+struct ToolbarMenuEntry {
     let title: String
-    let systemImage: String
-    let showsText: Bool
-    let help: String
-    let entries: [Entry]
-    @Binding var toolbarShowsText: Bool
+    let action: () -> Void
 
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
-
-    func makeNSView(context: Context) -> ToolbarVerticalMenuHostView {
-        let view = ToolbarVerticalMenuHostView()
-        view.coordinator = context.coordinator
-        return view
-    }
-
-    func updateNSView(_ nsView: ToolbarVerticalMenuHostView, context: Context) {
-        context.coordinator.entries = entries
-        nsView.coordinator = context.coordinator
-        nsView.updateLabel(
-            ToolbarVerticalMenuButtonLabel(
-                title: title,
-                systemImage: systemImage,
-                showsText: showsText,
-                toolbarShowsText: $toolbarShowsText
-            )
-        )
-        nsView.toolTip = help
-        nsView.setAccessibilityLabel(title)
-        nsView.setAccessibilityHelp(help)
-    }
-
-    @MainActor
-    final class Coordinator: NSObject {
-        var entries: [Entry] = []
-
-        @objc func performMenuAction(_ sender: NSMenuItem) {
-            let index = sender.tag
-            guard entries.indices.contains(index) else { return }
-            entries[index].action()
-        }
-
-        func makeMenu() -> NSMenu {
-            let menu = NSMenu()
-            for (index, entry) in entries.enumerated() {
-                let item = NSMenuItem(
-                    title: entry.title,
-                    action: #selector(performMenuAction(_:)),
-                    keyEquivalent: ""
-                )
-                item.target = self
-                item.tag = index
-                menu.addItem(item)
-            }
-            return menu
-        }
+    init(title: String, action: @escaping () -> Void) {
+        self.title = title
+        self.action = action
     }
 }
 
-struct ToolbarVerticalMenuButtonLabel: View {
+/// `Label` keeps overflow `>>` title+icon; click presents AppKit `NSMenu` below the control.
+private struct ToolbarLabelMenuButton: View {
     let title: String
     let systemImage: String
     let showsText: Bool
+    let entries: [ToolbarMenuEntry]
     @Binding var toolbarShowsText: Bool
 
+    @StateObject private var menuAnchor = ToolbarMenuAnchorController()
+
     var body: some View {
-        ToolbarActionFace(
-            title: title,
-            systemImage: systemImage,
-            showsText: showsText,
-            showsMenuChevron: true
-        )
-        .toolbarActionChrome()
-        .contentShape(Rectangle())
-        .contextMenu {
-            Toggle("Show Text", isOn: $toolbarShowsText)
+        Button {
+            menuAnchor.popUp(entries: entries)
+        } label: {
+            Label(title, systemImage: systemImage)
+                .labelStyle(
+                    ToolbarActionLabelStyle(
+                        showsText: showsText,
+                        showsMenuChevron: true
+                    )
+                )
+                .contentShape(Rectangle())
+                .contextMenu {
+                    Toggle("Show Text", isOn: $toolbarShowsText)
+                }
         }
+        .buttonStyle(ToolbarActionButtonStyle())
+        .background(ToolbarMenuAnchor(controller: menuAnchor))
+        .accessibilityLabel(title)
     }
 }
 
 @MainActor
-final class ToolbarVerticalMenuHostView: NSView {
-    weak var coordinator: ToolbarVerticalMenuButton.Coordinator?
-    private var hostingView: NSHostingView<ToolbarVerticalMenuButtonLabel>?
+final class ToolbarMenuAnchorController: ObservableObject {
+    weak var view: NSView?
 
-    override var isFlipped: Bool { true }
-
-    func updateLabel(_ label: ToolbarVerticalMenuButtonLabel) {
-        if let hostingView {
-            hostingView.rootView = label
-            invalidateIntrinsicContentSize()
-            return
+    func popUp(entries: [ToolbarMenuEntry]) {
+        guard let view, !entries.isEmpty else { return }
+        let menu = NSMenu()
+        for (index, entry) in entries.enumerated() {
+            let item = NSMenuItem(
+                title: entry.title,
+                action: #selector(ToolbarMenuAnchorController.performMenuAction(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.tag = index
+            item.representedObject = entry.title
+            menu.addItem(item)
         }
-
-        let hostingView = NSHostingView(rootView: label)
-        hostingView.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(hostingView)
-        NSLayoutConstraint.activate([
-            hostingView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            hostingView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            hostingView.topAnchor.constraint(equalTo: topAnchor),
-            hostingView.bottomAnchor.constraint(equalTo: bottomAnchor),
-        ])
-        self.hostingView = hostingView
+        // Stash actions by index for the selector.
+        pendingEntries = entries
+        // Default NSView is not flipped: y=0 is bottom. Anchor menu top-left to view bottom-left.
+        let location = NSPoint(x: view.bounds.minX, y: view.bounds.minY)
+        menu.popUp(positioning: nil, at: location, in: view)
+        pendingEntries = []
     }
 
-    override var intrinsicContentSize: NSSize {
-        hostingView?.fittingSize ?? NSSize(width: 44, height: ToolbarMetrics.verticalButtonMinHeight)
-    }
+    private var pendingEntries: [ToolbarMenuEntry] = []
 
-    override func mouseDown(with event: NSEvent) {
-        guard event.type == .leftMouseDown, let coordinator else { return }
-        let menu = coordinator.makeMenu()
-        // View is flipped (y=0 at top). Anchor the menu's top-left to the button's
-        // bottom-left so the dropdown opens *below* the control, not over it.
-        let location = NSPoint(x: bounds.minX, y: bounds.maxY)
-        menu.popUp(positioning: nil, at: location, in: self)
+    @objc func performMenuAction(_ sender: NSMenuItem) {
+        let index = sender.tag
+        guard pendingEntries.indices.contains(index) else { return }
+        pendingEntries[index].action()
     }
 }
 
-/// Shared vertical toolbar face (icon above caption, or padded icon-only).
-private struct ToolbarActionFace: View {
-    let title: String
-    let systemImage: String
-    let showsText: Bool
-    var showsMenuChevron: Bool = false
+private struct ToolbarMenuAnchor: NSViewRepresentable {
+    @ObservedObject var controller: ToolbarMenuAnchorController
 
-    var body: some View {
-        Group {
-            if showsText {
-                VStack(spacing: ToolbarMetrics.verticalIconTitleSpacing) {
-                    Image(systemName: systemImage)
-                        .font(.system(size: ToolbarMetrics.symbolPointSize))
-                        .frame(maxWidth: .infinity, alignment: .center)
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(frame: .zero)
+        controller.view = view
+        return view
+    }
 
-                    HStack(spacing: 2) {
-                        Text(title)
-                            .font(.system(size: ToolbarMetrics.captionPointSize))
-                            .lineLimit(1)
-                        if showsMenuChevron {
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: ToolbarMetrics.menuChevronPointSize, weight: .semibold))
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .center)
-                }
-                .padding(.horizontal, ToolbarMetrics.verticalHorizontalPadding)
-                .padding(.vertical, ToolbarMetrics.verticalVerticalPadding)
-                .frame(minHeight: ToolbarMetrics.verticalButtonMinHeight)
-            } else {
-                Image(systemName: systemImage)
-                    .font(.system(size: ToolbarMetrics.symbolPointSize))
-                    .padding(ToolbarMetrics.iconOnlyPadding)
-                    .frame(
-                        width: ToolbarMetrics.iconOnlyHitSize,
-                        height: ToolbarMetrics.iconOnlyHitSize
-                    )
-            }
-        }
-        .foregroundStyle(.primary)
+    func updateNSView(_ nsView: NSView, context: Context) {
+        controller.view = nsView
     }
 }
 
 /// Icon above caption (wide) or padded icon-only (half-fold). Keeps `Label` for overflow `>>` menus.
 private struct ToolbarActionLabelStyle: LabelStyle {
     let showsText: Bool
+    var showsMenuChevron: Bool = false
 
     func makeBody(configuration: Configuration) -> some View {
         Group {
@@ -382,10 +298,16 @@ private struct ToolbarActionLabelStyle: LabelStyle {
                         .font(.system(size: ToolbarMetrics.symbolPointSize))
                         .frame(maxWidth: .infinity, alignment: .center)
 
-                    configuration.title
-                        .font(.system(size: ToolbarMetrics.captionPointSize))
-                        .lineLimit(1)
-                        .frame(maxWidth: .infinity, alignment: .center)
+                    HStack(spacing: 2) {
+                        configuration.title
+                            .font(.system(size: ToolbarMetrics.captionPointSize))
+                            .lineLimit(1)
+                        if showsMenuChevron {
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: ToolbarMetrics.menuChevronPointSize, weight: .semibold))
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
                 }
                 .padding(.horizontal, ToolbarMetrics.verticalHorizontalPadding)
                 .padding(.vertical, ToolbarMetrics.verticalVerticalPadding)
