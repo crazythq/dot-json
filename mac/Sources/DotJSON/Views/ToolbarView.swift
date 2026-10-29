@@ -266,7 +266,7 @@ struct ToolbarVerticalMenuButton: NSViewRepresentable {
     }
 }
 
-private struct ToolbarVerticalMenuButtonLabel: View {
+struct ToolbarVerticalMenuButtonLabel: View {
     let title: String
     let systemImage: String
     let showsText: Bool
@@ -288,13 +288,13 @@ private struct ToolbarVerticalMenuButtonLabel: View {
 }
 
 @MainActor
-final class ToolbarVerticalMenuHostView: NSView {
+fileprivate final class ToolbarVerticalMenuHostView: NSView {
     weak var coordinator: ToolbarVerticalMenuButton.Coordinator?
     private var hostingView: NSHostingView<ToolbarVerticalMenuButtonLabel>?
 
     override var isFlipped: Bool { true }
 
-    func updateLabel(_ label: ToolbarVerticalMenuButtonLabel) {
+    fileprivate func updateLabel(_ label: ToolbarVerticalMenuButtonLabel) {
         if let hostingView {
             hostingView.rootView = label
             invalidateIntrinsicContentSize()
