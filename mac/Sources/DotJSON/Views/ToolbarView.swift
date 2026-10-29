@@ -134,17 +134,18 @@ struct ToolbarView: ToolbarContent {
             }
     }
 
-    /// SwiftUI `Menu` so toolbar `>>` keeps a real submenu; label uses vertical `LabelStyle`.
+    /// Wide: vertical face + AppKit submenu. Overflow: SwiftUI `Menu` keeps nested items + Label titles.
     private func toolbarVerticalMenuButton(
         title: String,
         systemImage: String,
         help: String,
         entries: [ToolbarMenuEntry]
     ) -> some View {
-        ToolbarSubmenuButton(
+        ToolbarHybridMenuButton(
             title: title,
             systemImage: systemImage,
             showsText: showsToolbarText,
+            help: help,
             entries: entries,
             toolbarShowsText: $toolbarShowsText
         )
@@ -203,36 +204,188 @@ struct ToolbarMenuEntry {
     }
 }
 
-/// `Menu` restores overflow submenus; vertical `LabelStyle` + chrome for the wide-toolbar face.
-private struct ToolbarSubmenuButton: View {
+/// Combines:
+/// - visible vertical chrome (same as Format/Clear) via AppKit host + `NSMenu` below the button
+/// - an invisible SwiftUI `Menu`+`Label` so toolbar `>>` overflow keeps title, icon, and submenu
+struct ToolbarHybridMenuButton: View {
     let title: String
     let systemImage: String
     let showsText: Bool
+    let help: String
     let entries: [ToolbarMenuEntry]
     @Binding var toolbarShowsText: Bool
 
     var body: some View {
-        Menu {
-            ForEach(Array(entries.enumerated()), id: \.offset) { _, entry in
-                Button(entry.title, action: entry.action)
-            }
-        } label: {
-            Label(title, systemImage: systemImage)
-                .labelStyle(
-                    ToolbarActionLabelStyle(
-                        showsText: showsText,
-                        showsMenuChevron: true
-                    )
-                )
-                .contentShape(Rectangle())
-                .contextMenu {
-                    Toggle("Show Text", isOn: $toolbarShowsText)
+        ZStack {
+            // Overflow / accessibility identity: real Menu with Label (nested items survive `>>`).
+            Menu {
+                ForEach(Array(entries.enumerated()), id: \.offset) { _, entry in
+                    Button(entry.title, action: entry.action)
                 }
+            } label: {
+                Label(title, systemImage: systemImage)
+            }
+            .labelStyle(.iconOnly)
+            .frame(width: 0, height: 0)
+            .opacity(0)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+
+            // Visible wide/half-fold control: vertical face; click opens NSMenu under the button.
+            ToolbarVerticalMenuHost(
+                title: title,
+                systemImage: systemImage,
+                showsText: showsText,
+                help: help,
+                entries: entries,
+                toolbarShowsText: $toolbarShowsText
+            )
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .buttonStyle(ToolbarActionButtonStyle())
+        .fixedSize()
+        .accessibilityElement(children: .combine)
         .accessibilityLabel(title)
+    }
+}
+
+struct ToolbarVerticalMenuHost: NSViewRepresentable {
+    let title: String
+    let systemImage: String
+    let showsText: Bool
+    let help: String
+    let entries: [ToolbarMenuEntry]
+    @Binding var toolbarShowsText: Bool
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    func makeNSView(context: Context) -> ToolbarVerticalMenuHostView {
+        let view = ToolbarVerticalMenuHostView()
+        view.coordinator = context.coordinator
+        return view
+    }
+
+    func updateNSView(_ nsView: ToolbarVerticalMenuHostView, context: Context) {
+        context.coordinator.entries = entries
+        nsView.coordinator = context.coordinator
+        nsView.updateLabel(
+            ToolbarVerticalMenuButtonLabel(
+                title: title,
+                systemImage: systemImage,
+                showsText: showsText,
+                toolbarShowsText: $toolbarShowsText
+            )
+        )
+        nsView.toolTip = help
+        nsView.setAccessibilityLabel(title)
+        nsView.setAccessibilityHelp(help)
+    }
+
+    @MainActor
+    final class Coordinator: NSObject {
+        var entries: [ToolbarMenuEntry] = []
+
+        @objc func performMenuAction(_ sender: NSMenuItem) {
+            let index = sender.tag
+            guard entries.indices.contains(index) else { return }
+            entries[index].action()
+        }
+
+        func makeMenu() -> NSMenu {
+            let menu = NSMenu()
+            for (index, entry) in entries.enumerated() {
+                let item = NSMenuItem(
+                    title: entry.title,
+                    action: #selector(performMenuAction(_:)),
+                    keyEquivalent: ""
+                )
+                item.target = self
+                item.tag = index
+                menu.addItem(item)
+            }
+            return menu
+        }
+    }
+}
+
+struct ToolbarVerticalMenuButtonLabel: View {
+    let title: String
+    let systemImage: String
+    let showsText: Bool
+    @Binding var toolbarShowsText: Bool
+
+    var body: some View {
+        Group {
+            if showsText {
+                VStack(spacing: ToolbarMetrics.verticalIconTitleSpacing) {
+                    Image(systemName: systemImage)
+                        .font(.system(size: ToolbarMetrics.symbolPointSize))
+                        .frame(maxWidth: .infinity, alignment: .center)
+                    HStack(spacing: 2) {
+                        Text(title)
+                            .font(.system(size: ToolbarMetrics.captionPointSize))
+                            .lineLimit(1)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: ToolbarMetrics.menuChevronPointSize, weight: .semibold))
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
+                }
+                .padding(.horizontal, ToolbarMetrics.verticalHorizontalPadding)
+                .padding(.vertical, ToolbarMetrics.verticalVerticalPadding)
+                .frame(minHeight: ToolbarMetrics.verticalButtonMinHeight)
+            } else {
+                Image(systemName: systemImage)
+                    .font(.system(size: ToolbarMetrics.symbolPointSize))
+                    .padding(ToolbarMetrics.iconOnlyPadding)
+                    .frame(
+                        width: ToolbarMetrics.iconOnlyHitSize,
+                        height: ToolbarMetrics.iconOnlyHitSize
+                    )
+            }
+        }
+        .foregroundStyle(.primary)
+        .toolbarActionChrome()
+        .contentShape(Rectangle())
+        .contextMenu {
+            Toggle("Show Text", isOn: $toolbarShowsText)
+        }
+    }
+}
+
+final class ToolbarVerticalMenuHostView: NSView {
+    weak var coordinator: ToolbarVerticalMenuHost.Coordinator?
+    private var hostingView: NSHostingView<ToolbarVerticalMenuButtonLabel>?
+
+    override var isFlipped: Bool { true }
+
+    func updateLabel(_ label: ToolbarVerticalMenuButtonLabel) {
+        if let hostingView {
+            hostingView.rootView = label
+            invalidateIntrinsicContentSize()
+            return
+        }
+        let hostingView = NSHostingView(rootView: label)
+        hostingView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(hostingView)
+        NSLayoutConstraint.activate([
+            hostingView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            hostingView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            hostingView.topAnchor.constraint(equalTo: topAnchor),
+            hostingView.bottomAnchor.constraint(equalTo: bottomAnchor),
+        ])
+        self.hostingView = hostingView
+    }
+
+    override var intrinsicContentSize: NSSize {
+        hostingView?.fittingSize ?? NSSize(width: 44, height: ToolbarMetrics.verticalButtonMinHeight)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        guard event.type == .leftMouseDown, let coordinator else { return }
+        let menu = coordinator.makeMenu()
+        // Flipped: y=0 top → anchor menu under the button.
+        let location = NSPoint(x: bounds.minX, y: bounds.maxY)
+        menu.popUp(positioning: nil, at: location, in: self)
     }
 }
 

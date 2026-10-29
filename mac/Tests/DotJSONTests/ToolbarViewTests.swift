@@ -63,18 +63,16 @@ struct ToolbarViewTests {
         #expect(source.contains("func toolbarActionChrome()"))
     }
 
-    @Test func convertAndExportUseSwiftUIMenuWithVerticalLabels() throws {
+    @Test func convertAndExportUseHybridVerticalMenuAndOverflowSubmenu() throws {
         let source = try toolbarSource()
 
-        #expect(source.contains("private struct ToolbarSubmenuButton: View"))
+        #expect(source.contains("struct ToolbarHybridMenuButton: View"))
+        #expect(source.contains("ToolbarVerticalMenuHostView"))
         #expect(source.contains("struct ToolbarMenuEntry"))
-        #expect(source.contains("showsMenuChevron: true"))
+        #expect(source.contains("bounds.maxY"))
         #expect(source.contains("Label(title, systemImage: systemImage)"))
-        #expect(source.contains(".menuStyle(.borderlessButton)"))
-        #expect(source.contains(".menuIndicator(.hidden)"))
         #expect(!source.contains("toolbarMenuActionLabel"))
-        #expect(!source.contains("ToolbarVerticalMenuHostView"))
-        #expect(!source.contains("ToolbarMenuAnchorController"))
+        #expect(!source.contains(".menuStyle(.borderlessButton)"))
         #expect(source.contains("toolbarVerticalMenuButton("))
     }
 
@@ -102,7 +100,7 @@ struct ToolbarViewTests {
 
         #expect(source.contains("Label(title, systemImage: systemImage)"))
         #expect(source.contains(".accessibilityLabel(title)"))
-        #expect(source.contains("ToolbarSubmenuButton"))
+        #expect(source.contains("ToolbarHybridMenuButton"))
     }
 
     @Test func contentViewPassesWindowWidthToToolbar() throws {
