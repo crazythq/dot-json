@@ -42,8 +42,8 @@ struct ToolbarViewTests {
 
         #expect(source.contains("toolbarActionButton(\"Format\", systemImage: \"text.alignleft\")"))
         #expect(source.contains("toolbarActionButton(\"Minify\", systemImage: \"text.aligncenter\")"))
-        #expect(source.contains("toolbarMenuActionLabel(\n                    String(localized: \"toolbar.convert\""))
-        #expect(source.contains("toolbarMenuActionLabel(\"Export\", systemImage: \"square.and.arrow.up\")"))
+        #expect(source.contains("toolbarVerticalMenuButton("))
+        #expect(source.contains("title: \"Export\""))
         #expect(source.contains("toolbarActionButton(\"Clear\", systemImage: \"trash\")"))
         #expect(source.contains("toolbarActionButton(\"Paste\", systemImage: \"doc.on.clipboard\")"))
         #expect(source.contains("toolbarActionButton(\"Copy\", systemImage: \"doc.on.doc\")"))
@@ -51,7 +51,6 @@ struct ToolbarViewTests {
         #expect(!source.contains("ControlGroup"))
         #expect(!source.contains("ToolbarItemGroup"))
         #expect(!source.contains(".labelStyle(.titleAndIcon)"))
-        #expect(!source.contains("ToolbarAdaptiveLabelStyle"))
     }
 
     @Test func toolbarUsesVerticalIconAboveCaptionLayout() throws {
@@ -59,23 +58,22 @@ struct ToolbarViewTests {
 
         #expect(source.contains("private struct ToolbarActionLabelStyle: LabelStyle"))
         #expect(source.contains("VStack(spacing: ToolbarMetrics.verticalIconTitleSpacing)"))
-        #expect(source.contains("configuration.icon"))
-        #expect(source.contains("configuration.title"))
         #expect(source.contains("static let captionPointSize: CGFloat = 11"))
         #expect(source.contains("static let verticalButtonMinHeight: CGFloat = 38"))
-        #expect(source.contains("private struct ToolbarActionButtonStyle: ButtonStyle"))
-        #expect(!source.contains("HStack(spacing: ToolbarMetrics.titleAndIconSpacing)"))
+        #expect(source.contains("func toolbarActionChrome()"))
     }
 
-    @Test func convertAndExportMenusUseVerticalMenuLabels() throws {
+    @Test func convertAndExportUseAppKitVerticalMenuButtonsNotSwiftUIMenu() throws {
         let source = try toolbarSource()
 
-        #expect(source.contains("private func toolbarMenuActionLabel"))
+        #expect(source.contains("struct ToolbarVerticalMenuButton: NSViewRepresentable"))
+        #expect(source.contains("ToolbarVerticalMenuHostView"))
         #expect(source.contains("ToolbarActionFace("))
         #expect(source.contains("showsMenuChevron: true"))
-        #expect(source.contains(".menuStyle(.borderlessButton)"))
-        #expect(source.contains(".menuIndicator(.hidden)"))
-        #expect(source.contains("horizontal titleAndIcon"))
+        #expect(source.contains("SwiftUI `Menu` ignores custom label chrome in toolbars"))
+        #expect(!source.contains("toolbarMenuActionLabel"))
+        #expect(!source.contains("Menu {"))
+        #expect(!source.contains(".menuStyle(.borderlessButton)"))
     }
 
     @Test func toolbarProvidesJSONImportAction() throws {
@@ -95,14 +93,13 @@ struct ToolbarViewTests {
 
         #expect(source.contains("static let hideTextBelowWidth: CGFloat = 780"))
         #expect(source.contains("static let iconOnlyHitSize: CGFloat = 28"))
-        #expect(source.contains("static let iconOnlyPadding: CGFloat = 6"))
     }
 
     @Test func toolbarIconLabelsKeepNativeLabelSemanticsForOverflowMenuRows() throws {
         let source = try toolbarSource()
 
         #expect(source.contains("Label(title, systemImage: systemImage)"))
-        #expect(source.contains(".foregroundStyle(.primary)"))
+        #expect(source.contains("setAccessibilityImage(image)"))
     }
 
     @Test func contentViewPassesWindowWidthToToolbar() throws {
