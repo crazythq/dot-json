@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import DotJSONCore
 
 struct SettingsView: View {
@@ -76,6 +77,8 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .frame(minWidth: 420, minHeight: 360)
+        // Form rarely becomes first-responder, so onExitCommand alone misses Esc.
+        .background(SettingsEscapeKeyMonitor())
         .onAppear {
             syncTogglesFromSystem()
         }
@@ -180,6 +183,45 @@ private struct FileAssociationToggleLabels: View {
             Text(subtitle)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+        }
+    }
+}
+
+
+/// Closes the hosting Settings window on Escape.
+/// Installed as a local key monitor while the Settings view is in a window.
+private struct SettingsEscapeKeyMonitor: NSViewRepresentable {
+    func makeNSView(context: Context) -> SettingsEscapeKeyView {
+        SettingsEscapeKeyView()
+    }
+
+    func updateNSView(_ nsView: SettingsEscapeKeyView, context: Context) {}
+
+    static func dismantleNSView(_ nsView: SettingsEscapeKeyView, coordinator: ()) {
+        nsView.tearDownMonitor()
+    }
+}
+
+private final class SettingsEscapeKeyView: NSView {
+    private var monitor: Any?
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        tearDownMonitor()
+        guard window != nil else { return }
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            // keyCode 53 == Escape
+            guard event.keyCode == 53 else { return event }
+            guard let window = self?.window, window.isKeyWindow else { return event }
+            window.performClose(nil)
+            return nil
+        }
+    }
+
+    func tearDownMonitor() {
+        if let monitor {
+            NSEvent.removeMonitor(monitor)
+            self.monitor = nil
         }
     }
 }

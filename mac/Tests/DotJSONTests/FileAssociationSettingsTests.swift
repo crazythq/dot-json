@@ -37,6 +37,19 @@ struct FileAssociationSettingsTests {
         #expect(settingsSource.contains("Section(\"Editor\")"))
     }
 
+
+    @Test func settingsSupportsEscapeAndCommandWClose() throws {
+        let settings = try String(contentsOf: dotJSONSource("Views/SettingsView.swift"), encoding: .utf8)
+        let commands = try String(contentsOf: dotJSONSource("App/DotJSONCommands.swift"), encoding: .utf8)
+        #expect(settings.contains("SettingsEscapeKeyMonitor"))
+        #expect(settings.contains("keyCode == 53"))
+        #expect(settings.contains("performClose(nil)"))
+        #expect(commands.contains("performCloseCommand()"))
+        #expect(commands.contains("isSettingsWindow"))
+        #expect(commands.contains("keyboardShortcut(\"w\", modifiers: .command)"))
+    }
+
+
     @Test func infoPlistDeclaresJsonlWithoutOwningPublicJsonl() throws {
         let plistURL = macPackageRoot().appendingPathComponent("Info.plist")
         let plist = try String(contentsOf: plistURL, encoding: .utf8)
