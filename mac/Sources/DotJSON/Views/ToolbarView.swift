@@ -66,20 +66,20 @@ struct ToolbarView: ToolbarContent {
                     Button {
                         workspace.activeDocument?.toPythonLiteral()
                     } label: {
-                        Text("toolbar.convert.toPython", bundle: .module)
+                        Text("toolbar.convert.toPython", bundle: DotJSONResourceBundle.bundle)
                     }
                     Button {
                         workspace.activeDocument?.toStandardJSON()
                     } label: {
-                        Text("toolbar.convert.toJSON", bundle: .module)
+                        Text("toolbar.convert.toJSON", bundle: DotJSONResourceBundle.bundle)
                     }
                 } label: {
                     toolbarIconLabel(
-                        String(localized: "toolbar.convert", bundle: .module),
+                        String(localized: "toolbar.convert", bundle: DotJSONResourceBundle.bundle),
                         systemImage: "arrow.left.arrow.right"
                     )
                 }
-                .help(Text("toolbar.convert.help", bundle: .module))
+                .help(Text("toolbar.convert.help", bundle: DotJSONResourceBundle.bundle))
             }
             .controlGroupStyle(.navigation)
             .controlSize(.large)

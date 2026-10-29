@@ -70,4 +70,20 @@ open "$(swift build --show-bin-path)/DotJSON.app"
 
 脚本会生成并 ad-hoc 签名 `DotJSON.app`。本地验证时，可在应用中打开 `.json` 文件，或把文件拖入窗口；构建产物不会进入 Git。
 
+### 验证 Release 包（模拟安装到「应用程序」）
+
+```bash
+cd mac
+./build-app.sh -c release
+BUILD_DIR="$(swift build -c release --show-bin-path)"
+ditto -c -k --keepParent "$BUILD_DIR/DotJSON.app" /tmp/DotJSON-test.zip
+rm -rf /tmp/DotJSON-verify.app
+ditto -xk /tmp/DotJSON-test.zip /tmp
+mv /tmp/DotJSON.app /tmp/DotJSON-verify.app
+open /tmp/DotJSON-verify.app
+# 或：cp -R /tmp/DotJSON-verify.app /Applications/DotJSON.app 后从 Finder 打开
+```
+
+应用应正常启动，不出现 `could not load resource bundle` 崩溃；标签页右键菜单与工具栏「转换」菜单应显示本地化文案。
+
 正式发布流程见仓库根目录 [docs/RELEASE.md](../docs/RELEASE.md)。

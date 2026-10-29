@@ -45,9 +45,8 @@ struct DotJSONApp: App {
     }
 
     private func setAppIcon() {
-        let appIconURL =
-            Bundle.main.url(forResource: "AppIcon", withExtension: "icns")
-            ?? Bundle.module.url(forResource: "AppIcon", withExtension: "icns")
+        let appIconURL = Bundle.main.url(forResource: "AppIcon", withExtension: "icns")
+            ?? DotJSONResourceBundle.bundle.url(forResource: "AppIcon", withExtension: "icns")
         if let url = appIconURL,
            let img = NSImage(contentsOf: url) {
             NSApplication.shared.applicationIconImage = img
