@@ -134,15 +134,14 @@ struct ToolbarView: ToolbarContent {
             }
     }
 
-    /// Vertical face via `Label` (so toolbar `>>` keeps title+icon) + AppKit `NSMenu` on click
-    /// (SwiftUI `Menu` would flatten the label to horizontal in the toolbar).
+    /// SwiftUI `Menu` so toolbar `>>` keeps a real submenu; label uses vertical `LabelStyle`.
     private func toolbarVerticalMenuButton(
         title: String,
         systemImage: String,
         help: String,
         entries: [ToolbarMenuEntry]
     ) -> some View {
-        ToolbarLabelMenuButton(
+        ToolbarSubmenuButton(
             title: title,
             systemImage: systemImage,
             showsText: showsToolbarText,
@@ -204,19 +203,19 @@ struct ToolbarMenuEntry {
     }
 }
 
-/// `Label` keeps overflow `>>` title+icon; click presents AppKit `NSMenu` below the control.
-private struct ToolbarLabelMenuButton: View {
+/// `Menu` restores overflow submenus; vertical `LabelStyle` + chrome for the wide-toolbar face.
+private struct ToolbarSubmenuButton: View {
     let title: String
     let systemImage: String
     let showsText: Bool
     let entries: [ToolbarMenuEntry]
     @Binding var toolbarShowsText: Bool
 
-    @StateObject private var menuAnchor = ToolbarMenuAnchorController()
-
     var body: some View {
-        Button {
-            menuAnchor.popUp(entries: entries)
+        Menu {
+            ForEach(Array(entries.enumerated()), id: \.offset) { _, entry in
+                Button(entry.title, action: entry.action)
+            }
         } label: {
             Label(title, systemImage: systemImage)
                 .labelStyle(
@@ -230,58 +229,10 @@ private struct ToolbarLabelMenuButton: View {
                     Toggle("Show Text", isOn: $toolbarShowsText)
                 }
         }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
         .buttonStyle(ToolbarActionButtonStyle())
-        .background(ToolbarMenuAnchor(controller: menuAnchor))
         .accessibilityLabel(title)
-    }
-}
-
-@MainActor
-final class ToolbarMenuAnchorController: ObservableObject {
-    weak var view: NSView?
-
-    func popUp(entries: [ToolbarMenuEntry]) {
-        guard let view, !entries.isEmpty else { return }
-        let menu = NSMenu()
-        for (index, entry) in entries.enumerated() {
-            let item = NSMenuItem(
-                title: entry.title,
-                action: #selector(ToolbarMenuAnchorController.performMenuAction(_:)),
-                keyEquivalent: ""
-            )
-            item.target = self
-            item.tag = index
-            item.representedObject = entry.title
-            menu.addItem(item)
-        }
-        // Stash actions by index for the selector.
-        pendingEntries = entries
-        // Default NSView is not flipped: y=0 is bottom. Anchor menu top-left to view bottom-left.
-        let location = NSPoint(x: view.bounds.minX, y: view.bounds.minY)
-        menu.popUp(positioning: nil, at: location, in: view)
-        pendingEntries = []
-    }
-
-    private var pendingEntries: [ToolbarMenuEntry] = []
-
-    @objc func performMenuAction(_ sender: NSMenuItem) {
-        let index = sender.tag
-        guard pendingEntries.indices.contains(index) else { return }
-        pendingEntries[index].action()
-    }
-}
-
-private struct ToolbarMenuAnchor: NSViewRepresentable {
-    @ObservedObject var controller: ToolbarMenuAnchorController
-
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView(frame: .zero)
-        controller.view = view
-        return view
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {
-        controller.view = nsView
     }
 }
 
