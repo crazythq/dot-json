@@ -5,153 +5,152 @@ import DotJSONCore
 private enum ToolbarMetrics {
     static let searchFieldWidth: CGFloat = 140
     static let controlSpacing: CGFloat = 6
+    static let symbolPointSize: CGFloat = 14
+    static let captionPointSize: CGFloat = 11
+    static let verticalIconTitleSpacing: CGFloat = 2
+    static let verticalHorizontalPadding: CGFloat = 8
+    static let verticalVerticalPadding: CGFloat = 4
+    static let verticalButtonMinHeight: CGFloat = 38
+    static let iconOnlyPadding: CGFloat = 6
+    static let iconOnlyHitSize: CGFloat = 28
+    static let actionCornerRadius: CGFloat = 6
+    static let menuChevronPointSize: CGFloat = 7
+    /// Below this content width, hide icon captions before relying on toolbar overflow.
+    static let hideTextBelowWidth: CGFloat = 780
 }
 
 struct ToolbarView: ToolbarContent {
+    /// Main editor width; used to hide captions on narrow windows before toolbar overflow.
+    var windowWidth: CGFloat = .greatestFiniteMagnitude
+
     @Environment(WorkspaceViewModel.self) private var workspace
     @AppStorage("toolbarShowsText") private var toolbarShowsText: Bool = true
 
+    private var showsToolbarText: Bool {
+        toolbarShowsText && windowWidth >= ToolbarMetrics.hideTextBelowWidth
+    }
+
     var body: some ToolbarContent {
-        // ── Left group ──
-        ToolbarItemGroup {
-            Button(action: { workspace.activeDocument?.format() }) {
-                Label {
-                    Text("Format")
-                } icon: {
-                    JSONTransformIconShape(kind: .formatted)
-                        .stroke(
-                            style: StrokeStyle(
-                                lineWidth: 1.35,
-                                lineCap: .round,
-                                lineJoin: .round
-                            )
-                        )
-                        .frame(width: 18, height: 18)
-                        .accessibilityHidden(true)
-                }
+        ToolbarItem {
+            toolbarActionButton("Format", systemImage: "text.alignleft") {
+                workspace.activeDocument?.format()
             }
             .help("Format JSON")
+        }
 
-            Button(action: { workspace.activeDocument?.minify() }) {
-                Label {
-                    Text("Minify")
-                } icon: {
-                    JSONTransformIconShape(kind: .minified)
-                        .stroke(
-                            style: StrokeStyle(
-                                lineWidth: 1.35,
-                                lineCap: .round,
-                                lineJoin: .round
-                            )
-                        )
-                        .frame(width: 18, height: 18)
-                        .accessibilityHidden(true)
-                }
+        ToolbarItem {
+            toolbarActionButton("Minify", systemImage: "text.aligncenter") {
+                workspace.activeDocument?.minify()
             }
             .help("Minify JSON")
         }
 
-        ToolbarItem(placement: .automatic) {
-            if let doc = workspace.activeDocument {
-                IndentPopUpButton(document: doc)
-                    .frame(width: IndentPopUpButton.toolbarWidth, height: 22)
-                    .help("Indent: 2 spaces / 4 spaces / Tab")
-            }
-        }
-
-        // ── Python / 标准 JSON 互转 ──
         ToolbarItem {
-            ControlGroup {
-                Menu {
-                    Button {
+            toolbarVerticalMenuButton(
+                title: String(localized: "toolbar.convert", bundle: DotJSONResourceBundle.bundle),
+                systemImage: "arrow.left.arrow.right",
+                help: String(localized: "toolbar.convert.help", bundle: DotJSONResourceBundle.bundle),
+                entries: [
+                    ToolbarMenuEntry(
+                        title: String(localized: "toolbar.convert.toPython", bundle: DotJSONResourceBundle.bundle)
+                    ) {
                         workspace.activeDocument?.toPythonLiteral()
-                    } label: {
-                        Text("toolbar.convert.toPython", bundle: DotJSONResourceBundle.bundle)
-                    }
-                    Button {
+                    },
+                    ToolbarMenuEntry(
+                        title: String(localized: "toolbar.convert.toJSON", bundle: DotJSONResourceBundle.bundle)
+                    ) {
                         workspace.activeDocument?.toStandardJSON()
-                    } label: {
-                        Text("toolbar.convert.toJSON", bundle: DotJSONResourceBundle.bundle)
-                    }
-                } label: {
-                    toolbarIconLabel(
-                        String(localized: "toolbar.convert", bundle: DotJSONResourceBundle.bundle),
-                        systemImage: "arrow.left.arrow.right"
-                    )
-                }
-                .help(Text("toolbar.convert.help", bundle: DotJSONResourceBundle.bundle))
-            }
-            .controlGroupStyle(.navigation)
-            .controlSize(.large)
+                    },
+                ]
+            )
         }
 
-        // ── 文件操作 ──
         ToolbarItem {
-            ControlGroup {
-                toolbarIconButton("Clear", systemImage: "trash") {
-                    workspace.activeDocument?.clear()
-                }
-                .help("Clear content")
-
-                toolbarIconButton("Paste", systemImage: "doc.on.clipboard") {
-                    pasteFromClipboard()
-                }
-                .help("Paste and format")
-                .keyboardShortcut("v", modifiers: [.command, .shift])
-
-                toolbarIconButton("Copy", systemImage: "doc.on.doc") {
-                    copyToClipboard()
-                }
-                .help("Copy to clipboard")
+            toolbarActionButton("Clear", systemImage: "trash") {
+                workspace.activeDocument?.clear()
             }
-            .controlGroupStyle(.navigation)
-            .controlSize(.large)
+            .help("Clear content")
+        }
+
+        ToolbarItem {
+            toolbarActionButton("Paste", systemImage: "doc.on.clipboard") {
+                pasteFromClipboard()
+            }
+            .help("Paste and format")
+            .keyboardShortcut("v", modifiers: [.command, .shift])
+        }
+
+        ToolbarItem {
+            toolbarActionButton("Copy", systemImage: "doc.on.doc") {
+                copyToClipboard()
+            }
+            .help("Copy to clipboard")
         }
 
         // ── 导入/导出 ──
         ToolbarItem {
-            ControlGroup {
-                toolbarIconButton("Import", systemImage: "square.and.arrow.down") {
-                    importDocument()
-                }
-                .help("Import JSON file")
-
-                Menu {
-                    Button("Export Formatted JSON") {
-                        export(format: .formatted)
-                    }
-                    Button("Export Minified JSON") {
-                        export(format: .minified)
-                    }
-                } label: {
-                    toolbarIconLabel("Export", systemImage: "square.and.arrow.up")
-                }
-                .help("Export JSON")
+            toolbarActionButton("Import", systemImage: "square.and.arrow.down") {
+                importDocument()
             }
-            .controlGroupStyle(.navigation)
-            .controlSize(.large)
+            .help("Import JSON file")
+        }
+
+        ToolbarItem {
+            toolbarVerticalMenuButton(
+                title: "Export",
+                systemImage: "square.and.arrow.up",
+                help: "Export JSON",
+                entries: [
+                    ToolbarMenuEntry(title: "Export Formatted JSON") {
+                        export(format: .formatted)
+                    },
+                    ToolbarMenuEntry(title: "Export Minified JSON") {
+                        export(format: .minified)
+                    },
+                ]
+            )
         }
     }
 
-    private func toolbarIconButton(
+    private func toolbarActionButton(
         _ title: String,
         systemImage: String,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            toolbarIconLabel(title, systemImage: systemImage)
+            toolbarActionLabel(title, systemImage: systemImage)
         }
-        .controlSize(.large)
+        .buttonStyle(ToolbarActionButtonStyle())
         .accessibilityLabel(title)
     }
 
-    private func toolbarIconLabel(_ title: String, systemImage: String) -> some View {
+    /// Plain `Button` label — keeps `Label` so overflow `>>` rows retain SF Symbol icons.
+    private func toolbarActionLabel(_ title: String, systemImage: String) -> some View {
         Label(title, systemImage: systemImage)
-            .labelStyle(ToolbarIconLabelStyle(showsText: toolbarShowsText))
+            .labelStyle(ToolbarActionLabelStyle(showsText: showsToolbarText))
             .contentShape(Rectangle())
             .contextMenu {
                 Toggle("Show Text", isOn: $toolbarShowsText)
             }
+    }
+
+    /// Wide: vertical face + AppKit submenu. Overflow: SwiftUI `Menu` keeps nested items + Label titles.
+    private func toolbarVerticalMenuButton(
+        title: String,
+        systemImage: String,
+        help: String,
+        entries: [ToolbarMenuEntry]
+    ) -> some View {
+        ToolbarHybridMenuButton(
+            title: title,
+            systemImage: systemImage,
+            showsText: showsToolbarText,
+            help: help,
+            entries: entries,
+            toolbarShowsText: $toolbarShowsText
+        )
+        .help(help)
+        .accessibilityLabel(title)
     }
 
     private func pasteFromClipboard() {
@@ -195,110 +194,258 @@ struct ToolbarView: ToolbarContent {
     }
 }
 
-/// JSON 格式化与压缩操作共用的结构图标。
-///
-/// 两种状态复用同一对花括号，仅通过内部横线数量表达多行或单行 JSON，
-/// 从而让图标在较小的原生工具栏画布中仍保持成对且可辨识。
-private struct JSONTransformIconShape: Shape {
-    /// 图标所表达的 JSON 输出结构。
-    enum Kind {
-        case formatted
-        case minified
-    }
+struct ToolbarMenuEntry {
+    let title: String
+    let action: () -> Void
 
-    let kind: Kind
-
-    /// 在给定画布内生成花括号及内容行路径。
-    ///
-    /// - Parameter rect: SwiftUI 分配给图标的绘制区域。
-    /// - Returns: 使用相对坐标构成的矢量路径，可随工具栏尺寸无损缩放。
-    func path(in rect: CGRect) -> Path {
-        let x = { (value: CGFloat) in rect.minX + rect.width * value }
-        let y = { (value: CGFloat) in rect.minY + rect.height * value }
-        var path = Path()
-
-        // 花括号轮廓保持完全一致，避免两个操作被误认为无关功能。
-        path.move(to: CGPoint(x: x(0.32), y: y(0.06)))
-        path.addCurve(
-            to: CGPoint(x: x(0.18), y: y(0.33)),
-            control1: CGPoint(x: x(0.21), y: y(0.06)),
-            control2: CGPoint(x: x(0.24), y: y(0.25))
-        )
-        path.addCurve(
-            to: CGPoint(x: x(0.10), y: y(0.50)),
-            control1: CGPoint(x: x(0.18), y: y(0.43)),
-            control2: CGPoint(x: x(0.10), y: y(0.42))
-        )
-        path.addCurve(
-            to: CGPoint(x: x(0.18), y: y(0.67)),
-            control1: CGPoint(x: x(0.10), y: y(0.58)),
-            control2: CGPoint(x: x(0.18), y: y(0.57))
-        )
-        path.addCurve(
-            to: CGPoint(x: x(0.32), y: y(0.94)),
-            control1: CGPoint(x: x(0.24), y: y(0.75)),
-            control2: CGPoint(x: x(0.21), y: y(0.94))
-        )
-
-        path.move(to: CGPoint(x: x(0.68), y: y(0.06)))
-        path.addCurve(
-            to: CGPoint(x: x(0.82), y: y(0.33)),
-            control1: CGPoint(x: x(0.79), y: y(0.06)),
-            control2: CGPoint(x: x(0.76), y: y(0.25))
-        )
-        path.addCurve(
-            to: CGPoint(x: x(0.90), y: y(0.50)),
-            control1: CGPoint(x: x(0.82), y: y(0.43)),
-            control2: CGPoint(x: x(0.90), y: y(0.42))
-        )
-        path.addCurve(
-            to: CGPoint(x: x(0.82), y: y(0.67)),
-            control1: CGPoint(x: x(0.90), y: y(0.58)),
-            control2: CGPoint(x: x(0.82), y: y(0.57))
-        )
-        path.addCurve(
-            to: CGPoint(x: x(0.68), y: y(0.94)),
-            control1: CGPoint(x: x(0.76), y: y(0.75)),
-            control2: CGPoint(x: x(0.79), y: y(0.94))
-        )
-
-        let rows: [(y: CGFloat, startX: CGFloat, endX: CGFloat)]
-        switch kind {
-        case .formatted:
-            rows = [
-                (0.32, 0.38, 0.62),
-                (0.50, 0.35, 0.58),
-                (0.68, 0.38, 0.65),
-            ]
-        case .minified:
-            rows = [(0.50, 0.35, 0.65)]
-        }
-
-        for row in rows {
-            path.move(to: CGPoint(x: x(row.startX), y: y(row.y)))
-            path.addLine(to: CGPoint(x: x(row.endX), y: y(row.y)))
-        }
-
-        return path
+    init(title: String, action: @escaping () -> Void) {
+        self.title = title
+        self.action = action
     }
 }
 
-private struct ToolbarIconLabelStyle: LabelStyle {
+/// Combines:
+/// - visible vertical chrome (same as Format/Clear) via AppKit host + `NSMenu` below the button
+/// - an invisible SwiftUI `Menu`+`Label` so toolbar `>>` overflow keeps title, icon, and submenu
+struct ToolbarHybridMenuButton: View {
+    let title: String
+    let systemImage: String
     let showsText: Bool
+    let help: String
+    let entries: [ToolbarMenuEntry]
+    @Binding var toolbarShowsText: Bool
 
-    func makeBody(configuration: Configuration) -> some View {
-        VStack(spacing: 2) {
-            configuration.icon
-                .font(.system(size: 15, weight: .regular))
-                .frame(width: 18, height: 18, alignment: .center)
+    var body: some View {
+        ZStack {
+            // Overflow / accessibility identity: real Menu with Label (nested items survive `>>`).
+            Menu {
+                ForEach(Array(entries.enumerated()), id: \.offset) { _, entry in
+                    Button(entry.title, action: entry.action)
+                }
+            } label: {
+                Label(title, systemImage: systemImage)
+            }
+            .labelStyle(.iconOnly)
+            .frame(width: 0, height: 0)
+            .opacity(0)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
 
+            // Visible wide/half-fold control: vertical face; click opens NSMenu under the button.
+            ToolbarVerticalMenuHost(
+                title: title,
+                systemImage: systemImage,
+                showsText: showsText,
+                help: help,
+                entries: entries,
+                toolbarShowsText: $toolbarShowsText
+            )
+        }
+        .fixedSize()
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(title)
+    }
+}
+
+struct ToolbarVerticalMenuHost: NSViewRepresentable {
+    let title: String
+    let systemImage: String
+    let showsText: Bool
+    let help: String
+    let entries: [ToolbarMenuEntry]
+    @Binding var toolbarShowsText: Bool
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    func makeNSView(context: Context) -> ToolbarVerticalMenuHostView {
+        let view = ToolbarVerticalMenuHostView()
+        view.coordinator = context.coordinator
+        return view
+    }
+
+    func updateNSView(_ nsView: ToolbarVerticalMenuHostView, context: Context) {
+        context.coordinator.entries = entries
+        nsView.coordinator = context.coordinator
+        nsView.updateLabel(
+            ToolbarVerticalMenuButtonLabel(
+                title: title,
+                systemImage: systemImage,
+                showsText: showsText,
+                toolbarShowsText: $toolbarShowsText
+            )
+        )
+        nsView.toolTip = help
+        nsView.setAccessibilityLabel(title)
+        nsView.setAccessibilityHelp(help)
+    }
+
+    @MainActor
+    final class Coordinator: NSObject {
+        var entries: [ToolbarMenuEntry] = []
+
+        @objc func performMenuAction(_ sender: NSMenuItem) {
+            let index = sender.tag
+            guard entries.indices.contains(index) else { return }
+            entries[index].action()
+        }
+
+        func makeMenu() -> NSMenu {
+            let menu = NSMenu()
+            for (index, entry) in entries.enumerated() {
+                let item = NSMenuItem(
+                    title: entry.title,
+                    action: #selector(performMenuAction(_:)),
+                    keyEquivalent: ""
+                )
+                item.target = self
+                item.tag = index
+                menu.addItem(item)
+            }
+            return menu
+        }
+    }
+}
+
+struct ToolbarVerticalMenuButtonLabel: View {
+    let title: String
+    let systemImage: String
+    let showsText: Bool
+    @Binding var toolbarShowsText: Bool
+
+    var body: some View {
+        Group {
             if showsText {
-                configuration.title
-                    .font(.system(size: 9, weight: .regular))
-                    .lineLimit(1)
+                VStack(spacing: ToolbarMetrics.verticalIconTitleSpacing) {
+                    Image(systemName: systemImage)
+                        .font(.system(size: ToolbarMetrics.symbolPointSize))
+                        .frame(maxWidth: .infinity, alignment: .center)
+                    HStack(spacing: 2) {
+                        Text(title)
+                            .font(.system(size: ToolbarMetrics.captionPointSize))
+                            .lineLimit(1)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: ToolbarMetrics.menuChevronPointSize, weight: .semibold))
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
+                }
+                .padding(.horizontal, ToolbarMetrics.verticalHorizontalPadding)
+                .padding(.vertical, ToolbarMetrics.verticalVerticalPadding)
+                .frame(minHeight: ToolbarMetrics.verticalButtonMinHeight)
+            } else {
+                Image(systemName: systemImage)
+                    .font(.system(size: ToolbarMetrics.symbolPointSize))
+                    .padding(ToolbarMetrics.iconOnlyPadding)
+                    .frame(
+                        width: ToolbarMetrics.iconOnlyHitSize,
+                        height: ToolbarMetrics.iconOnlyHitSize
+                    )
             }
         }
         .foregroundStyle(.primary)
-        .frame(width: 42, height: showsText ? 42 : 30, alignment: .center)
+        .toolbarActionChrome()
+        .contentShape(Rectangle())
+        .contextMenu {
+            Toggle("Show Text", isOn: $toolbarShowsText)
+        }
+    }
+}
+
+final class ToolbarVerticalMenuHostView: NSView {
+    weak var coordinator: ToolbarVerticalMenuHost.Coordinator?
+    private var hostingView: NSHostingView<ToolbarVerticalMenuButtonLabel>?
+
+    override var isFlipped: Bool { true }
+
+    func updateLabel(_ label: ToolbarVerticalMenuButtonLabel) {
+        if let hostingView {
+            hostingView.rootView = label
+            invalidateIntrinsicContentSize()
+            return
+        }
+        let hostingView = NSHostingView(rootView: label)
+        hostingView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(hostingView)
+        NSLayoutConstraint.activate([
+            hostingView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            hostingView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            hostingView.topAnchor.constraint(equalTo: topAnchor),
+            hostingView.bottomAnchor.constraint(equalTo: bottomAnchor),
+        ])
+        self.hostingView = hostingView
+    }
+
+    override var intrinsicContentSize: NSSize {
+        hostingView?.fittingSize ?? NSSize(width: 44, height: ToolbarMetrics.verticalButtonMinHeight)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        guard event.type == .leftMouseDown, let coordinator else { return }
+        let menu = coordinator.makeMenu()
+        // Flipped: y=0 top → anchor menu under the button.
+        let location = NSPoint(x: bounds.minX, y: bounds.maxY)
+        menu.popUp(positioning: nil, at: location, in: self)
+    }
+}
+
+/// Icon above caption (wide) or padded icon-only (half-fold). Keeps `Label` for overflow `>>` menus.
+private struct ToolbarActionLabelStyle: LabelStyle {
+    let showsText: Bool
+    var showsMenuChevron: Bool = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        Group {
+            if showsText {
+                VStack(spacing: ToolbarMetrics.verticalIconTitleSpacing) {
+                    configuration.icon
+                        .font(.system(size: ToolbarMetrics.symbolPointSize))
+                        .frame(maxWidth: .infinity, alignment: .center)
+
+                    HStack(spacing: 2) {
+                        configuration.title
+                            .font(.system(size: ToolbarMetrics.captionPointSize))
+                            .lineLimit(1)
+                        if showsMenuChevron {
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: ToolbarMetrics.menuChevronPointSize, weight: .semibold))
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
+                }
+                .padding(.horizontal, ToolbarMetrics.verticalHorizontalPadding)
+                .padding(.vertical, ToolbarMetrics.verticalVerticalPadding)
+                .frame(minHeight: ToolbarMetrics.verticalButtonMinHeight)
+            } else {
+                configuration.icon
+                    .font(.system(size: ToolbarMetrics.symbolPointSize))
+                    .padding(ToolbarMetrics.iconOnlyPadding)
+                    .frame(
+                        width: ToolbarMetrics.iconOnlyHitSize,
+                        height: ToolbarMetrics.iconOnlyHitSize
+                    )
+            }
+        }
+        .foregroundStyle(.primary)
+    }
+}
+
+private extension View {
+    func toolbarActionChrome() -> some View {
+        background {
+            RoundedRectangle(cornerRadius: ToolbarMetrics.actionCornerRadius, style: .continuous)
+                .fill(Color.primary.opacity(0.06))
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: ToolbarMetrics.actionCornerRadius, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.2), lineWidth: 0.5)
+        }
+    }
+}
+
+/// Rounded border wraps the full action label (icon + caption rows).
+private struct ToolbarActionButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.toolbarActionChrome()
     }
 }
