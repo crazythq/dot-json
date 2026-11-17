@@ -88,4 +88,30 @@ struct TreeDataSourceTests {
         let tree = JSONTree(root: try JSONParser.parse(#"{"a":1}"#))
         #expect(tree.child(of: nil, at: 99) == nil)
     }
+
+    /// 收集子树可展开 ID：包含起点自身与子孙容器，不含兄弟分支。
+    @Test func containerIDsUnderNodeIncludesSelfAndDescendantsOnly() throws {
+        let tree = JSONTree(root: try JSONParser.parse(
+            #"{"keep":{"nested":{"leaf":1}},"other":{"x":2},"plain":"s"}"#
+        ))
+        let keep = TreeNodeID(components: [.key("keep")])
+        let nested = TreeNodeID(components: [.key("keep"), .key("nested")])
+        let other = TreeNodeID(components: [.key("other")])
+        let plain = TreeNodeID(components: [.key("plain")])
+
+        let ids = tree.containerIDs(under: keep)
+
+        #expect(ids.contains(keep))
+        #expect(ids.contains(nested))
+        #expect(!ids.contains(TreeNodeID.root))
+        #expect(!ids.contains(other))
+        #expect(!ids.contains(plain))
+    }
+
+    /// 叶子节点的子树不含任何可展开 ID。
+    @Test func containerIDsUnderLeafIsEmpty() throws {
+        let tree = JSONTree(root: try JSONParser.parse(#"{"plain":"s"}"#))
+        let plain = TreeNodeID(components: [.key("plain")])
+        #expect(tree.containerIDs(under: plain).isEmpty)
+    }
 }

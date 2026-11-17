@@ -115,6 +115,29 @@ struct JSONTree {
 
         return Item(id: currentID, key: currentKey, node: currentNode)
     }
+
+    /// 收集以 `nodeID` 为根的子树中全部可展开节点身份（含自身）。
+    ///
+    /// - Parameter nodeID: 子树起点；不存在或不可展开时返回空集合。
+    /// - Returns: 起点及其子孙中所有容器节点的身份。
+    func containerIDs(under nodeID: TreeNodeID) -> Set<TreeNodeID> {
+        guard let start = item(for: nodeID), start.node.isContainer else {
+            return []
+        }
+        var result: Set<TreeNodeID> = []
+        var stack: [Item] = [start]
+        while let current = stack.popLast() {
+            guard current.node.isContainer else { continue }
+            result.insert(current.id)
+            let childCount = numberOfChildren(of: current)
+            for index in 0..<childCount {
+                if let child = child(of: current, at: index) {
+                    stack.append(child)
+                }
+            }
+        }
+        return result
+    }
 }
 
 extension JSONTree.Item {

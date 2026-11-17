@@ -38,6 +38,14 @@ final class EditorViewModel: Identifiable {
         case minified
     }
 
+    /// 树节点编辑失败原因。
+    enum NodeEditError: Error, Equatable, Sendable {
+        /// 根节点不可删除。
+        case cannotDeleteRoot
+        /// 当前没有可编辑的解析树。
+        case missingTree
+    }
+
     var rawText: String = "" {
         didSet {
             reparse()
@@ -157,6 +165,29 @@ final class EditorViewModel: Identifiable {
         } else {
             rawText = text
         }
+    }
+
+    /// 删除指定树节点及其全部子内容，并按当前缩进写回左侧文本。
+    ///
+    /// - Parameter nodeID: 要删除的节点身份；根节点会被拒绝。
+    /// - Throws: `NodeEditError` 或路径遍历失败时的底层错误。
+    func deleteNode(at nodeID: TreeNodeID) throws {
+        guard nodeID != .root else {
+            throw NodeEditError.cannotDeleteRoot
+        }
+        guard let treeRoot else {
+            throw NodeEditError.missingTree
+        }
+        let path = JSONPath(nodeID.components.map { component in
+            switch component {
+            case .key(let key):
+                return JSONPathComponent.key(key)
+            case .index(let index):
+                return JSONPathComponent.index(index)
+            }
+        })
+        let updated = try treeRoot.removing(at: path)
+        rawText = try JSONFormatter.format(updated, indent: indent)
     }
 
     // MARK: - Search

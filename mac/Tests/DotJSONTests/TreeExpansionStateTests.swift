@@ -63,4 +63,42 @@ struct TreeExpansionStateTests {
         #expect(state.systemExpandedIDs.contains(outer))
         #expect(!state.userExpandedIDs.contains(outer))
     }
+
+    /// 批量展开会写入用户状态，并清掉对应的系统临时展开与阻止标记。
+    @Test func expandAllWritesUserStateAndClearsSystemAndBlock() {
+        var state = TreeExpansionState()
+        state.beginSearchSession()
+        state.replaceSystemExpansion(with: [root, outer])
+        state.recordUserCollapsed(inner)
+
+        state.expandAll(in: [outer, inner])
+
+        #expect(state.userExpandedIDs == [outer, inner])
+        #expect(!state.systemExpandedIDs.contains(outer))
+        #expect(!state.systemExpandedIDs.contains(inner))
+        #expect(state.effectiveExpandedIDs.isSuperset(of: [outer, inner]))
+
+        state.replaceSystemExpansion(with: [root, outer, inner])
+        #expect(state.systemExpandedIDs.contains(outer) || state.userExpandedIDs.contains(outer))
+        #expect(state.effectiveExpandedIDs.contains(inner))
+    }
+
+    /// 批量收起会清除用户与系统展开；搜索会话中还会阻止后续系统再展开。
+    @Test func collapseAllClearsExpansionAndBlocksDuringSearch() {
+        var state = TreeExpansionState()
+        state.recordUserExpanded(outer)
+        state.recordUserExpanded(inner)
+        state.beginSearchSession()
+        state.replaceSystemExpansion(with: [root, outer, inner])
+
+        state.collapseAll(in: [outer, inner])
+        state.replaceSystemExpansion(with: [root, outer, inner])
+
+        #expect(!state.userExpandedIDs.contains(outer))
+        #expect(!state.userExpandedIDs.contains(inner))
+        #expect(!state.systemExpandedIDs.contains(outer))
+        #expect(!state.systemExpandedIDs.contains(inner))
+        #expect(!state.effectiveExpandedIDs.contains(outer))
+        #expect(!state.effectiveExpandedIDs.contains(inner))
+    }
 }

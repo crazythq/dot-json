@@ -114,8 +114,11 @@ struct TreeView: NSViewRepresentable {
 
     /// 负责数据源、搜索呈现和用户展开状态的 AppKit 协调器。
     @MainActor
-    final class Coordinator: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegate {
+    final class Coordinator: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegate, NSMenuItemValidation {
         weak var outlineView: NSOutlineView?
+
+        /// 最近一次同步时的编辑器，供右键菜单动作写回文本。
+        private weak var editorViewModel: EditorViewModel?
 
         private var lastTreeRoot: JSONNode?
         private var lastTreeSearchMatches: [TreeSearchMatch] = []
@@ -131,7 +134,7 @@ struct TreeView: NSViewRepresentable {
 
         /// 创建树节点右键菜单。
         ///
-        /// - Returns: 包含 Copy Key、Copy Value 和 Copy JSON Path 的菜单。
+        /// - Returns: 包含复制、展开/收起子树、删除节点的菜单。
         func buildMenu() -> NSMenu {
             let menu = NSMenu()
 
@@ -160,6 +163,34 @@ struct TreeView: NSViewRepresentable {
             )
             copyPathItem.target = self
             menu.addItem(copyPathItem)
+
+            menu.addItem(.separator())
+
+            let expandAllItem = NSMenuItem(
+                title: "Expand All",
+                action: #selector(expandAllUnderContext),
+                keyEquivalent: ""
+            )
+            expandAllItem.target = self
+            menu.addItem(expandAllItem)
+
+            let collapseAllItem = NSMenuItem(
+                title: "Collapse All",
+                action: #selector(collapseAllUnderContext),
+                keyEquivalent: ""
+            )
+            collapseAllItem.target = self
+            menu.addItem(collapseAllItem)
+
+            menu.addItem(.separator())
+
+            let deleteItem = NSMenuItem(
+                title: "Delete Node",
+                action: #selector(deleteContextNode),
+                keyEquivalent: ""
+            )
+            deleteItem.target = self
+            menu.addItem(deleteItem)
             return menu
         }
 
@@ -216,6 +247,81 @@ struct TreeView: NSViewRepresentable {
             NSPasteboard.general.setString(item.jsonPath, forType: .string)
         }
 
+        /// 展开右键节点及其全部可展开子孙。
+        @objc private func expandAllUnderContext() {
+            guard let item = contextMenuItem(),
+                  let treeRoot = lastTreeRoot,
+                  item.node.isContainer else {
+                return
+            }
+            let tree = JSONTree(root: treeRoot)
+            let ids = tree.containerIDs(under: item.id)
+            expansionState.expandAll(in: ids)
+            applyEffectiveExpansion(tree: tree)
+        }
+
+        /// 收起右键节点及其全部已展开子孙。
+        @objc private func collapseAllUnderContext() {
+            guard let item = contextMenuItem(),
+                  let treeRoot = lastTreeRoot,
+                  item.node.isContainer else {
+                return
+            }
+            let tree = JSONTree(root: treeRoot)
+            let ids = tree.containerIDs(under: item.id)
+            expansionState.collapseAll(in: ids)
+            applyEffectiveExpansion(tree: tree)
+        }
+
+        /// 确认后删除右键节点及其子内容。
+        @objc private func deleteContextNode() {
+            guard let item = contextMenuItem(),
+                  item.id != .root,
+                  let editorViewModel else {
+                return
+            }
+            presentDeleteConfirmation(for: item) {
+                try? editorViewModel.deleteNode(at: item.id)
+            }
+        }
+
+        /// 按右键命中节点启用或禁用展开/收起与删除菜单项。
+        func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+            guard let item = contextMenuItem() else { return false }
+            switch menuItem.action {
+            case #selector(expandAllUnderContext), #selector(collapseAllUnderContext):
+                return item.node.isContainer
+            case #selector(deleteContextNode):
+                return item.id != .root
+            default:
+                return true
+            }
+        }
+
+        /// 弹出删除确认；优先以 sheet 挂在当前窗口上。
+        private func presentDeleteConfirmation(
+            for item: JSONTree.Item,
+            onConfirm: @escaping () -> Void
+        ) {
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = "Delete \"\(item.key)\"?"
+            alert.informativeText =
+                "This will permanently remove the node and all of its children from the document."
+            alert.addButton(withTitle: "Delete")
+            alert.addButton(withTitle: "Cancel")
+
+            if let window = NSApp.keyWindow {
+                alert.beginSheetModal(for: window) { response in
+                    guard response == .alertFirstButtonReturn else { return }
+                    onConfirm()
+                }
+            } else {
+                guard alert.runModal() == .alertFirstButtonReturn else { return }
+                onConfirm()
+            }
+        }
+
         /// 返回最近一次右键命中的真实树项。
         private func contextMenuItem() -> JSONTree.Item? {
             guard let contextView = outlineView as? ContextMenuOutlineView,
@@ -229,6 +335,7 @@ struct TreeView: NSViewRepresentable {
         ///
         /// - Parameter viewModel: 当前编辑器状态。
         func reloadIfNeeded(viewModel: EditorViewModel) {
+            editorViewModel = viewModel
             guard let treeRoot = viewModel.treeRoot else {
                 if lastTreeRoot != nil {
                     lastTreeRoot = nil

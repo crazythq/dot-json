@@ -68,4 +68,22 @@ struct TreeExpansionState: Sendable {
         }
         systemExpandedIDs = Set(nodeIDs).subtracting(userBlockedSystemIDs)
     }
+
+    /// 批量记录用户展开，并清除对应的系统临时展开与阻止标记。
+    ///
+    /// - Parameter ids: 需要展开的节点身份集合。
+    mutating func expandAll(in ids: Set<TreeNodeID>) {
+        for nodeID in ids {
+            recordUserExpanded(nodeID)
+        }
+    }
+
+    /// 批量记录用户收起；搜索会话中会阻止后续系统再展开同一批节点。
+    ///
+    /// - Parameter ids: 需要收起的节点身份集合。
+    mutating func collapseAll(in ids: Set<TreeNodeID>) {
+        for nodeID in ids {
+            recordUserCollapsed(nodeID)
+        }
+    }
 }

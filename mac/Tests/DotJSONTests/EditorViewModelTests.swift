@@ -442,4 +442,46 @@ struct EditorViewModelTests {
     @Test func autoFormatOnPasteEnabledByDefault() {
         #expect(EditorViewModel().autoFormatOnPaste == true)
     }
+
+    // MARK: - Delete Node
+
+    @Test func deleteObjectKeyUpdatesRawText() throws {
+        let vm = EditorViewModel()
+        vm.rawText = #"{"a":1,"b":{"nested":true}}"#
+
+        try vm.deleteNode(at: TreeNodeID(components: [.key("b")]))
+
+        #expect(vm.rawText == """
+        {
+            "a": 1
+        }
+        """)
+        #expect(vm.treeRoot != nil)
+        #expect(vm.isModified)
+    }
+
+    @Test func deleteArrayElementUpdatesRawText() throws {
+        let vm = EditorViewModel()
+        vm.rawText = #"[1,{"x":2},3]"#
+
+        try vm.deleteNode(at: TreeNodeID(components: [.index(1)]))
+
+        #expect(vm.rawText == """
+        [
+            1,
+            3
+        ]
+        """)
+    }
+
+    @Test func deleteRootThrowsAndLeavesContentUnchanged() {
+        let vm = EditorViewModel()
+        vm.rawText = #"{"keep":true}"#
+        let before = vm.rawText
+
+        #expect(throws: EditorViewModel.NodeEditError.cannotDeleteRoot) {
+            try vm.deleteNode(at: .root)
+        }
+        #expect(vm.rawText == before)
+    }
 }
