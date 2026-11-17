@@ -52,7 +52,8 @@ final class NSAlertUpdateAlerter: UpdateAlerter {
     func presentCheckFailed(onOpenReleases: @escaping () -> Void) {
         let alert = NSAlert()
         alert.messageText = "Couldn't Check for Updates"
-        alert.informativeText = "DotJSON could not reach GitHub to check for updates."
+        alert.informativeText =
+            "DotJSON couldn't finish checking for updates. GitHub may be unreachable, or the API rate limit for your network may be exceeded."
         alert.alertStyle = .warning
         alert.addButton(withTitle: "OK")
         alert.addButton(withTitle: "Open Releases Page")

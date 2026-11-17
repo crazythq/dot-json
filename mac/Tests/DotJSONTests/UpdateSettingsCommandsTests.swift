@@ -31,4 +31,12 @@ struct UpdateSettingsCommandsTests {
         let text = try String(contentsOf: source("App/DotJSONApp.swift"), encoding: .utf8)
         #expect(text.contains("runAutomaticCheckIfNeeded"))
     }
+
+    @Test func checkFailedAlertMentionsUnreachableAndRateLimit() throws {
+        let text = try String(contentsOf: source("Update/UpdatePromptCoordinator.swift"), encoding: .utf8)
+        #expect(text.contains("Couldn't Check for Updates"))
+        #expect(text.contains("couldn't finish checking for updates"))
+        #expect(text.contains("API rate limit"))
+        #expect(!text.contains("could not reach GitHub to check for updates"))
+    }
 }
