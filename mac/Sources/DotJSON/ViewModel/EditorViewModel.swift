@@ -39,11 +39,20 @@ final class EditorViewModel: Identifiable {
     }
 
     /// 树节点编辑失败原因。
-    enum NodeEditError: Error, Equatable, Sendable {
+    enum NodeEditError: Error, Equatable, LocalizedError, Sendable {
         /// 根节点不可删除。
         case cannotDeleteRoot
         /// 当前没有可编辑的解析树。
         case missingTree
+
+        var errorDescription: String? {
+            switch self {
+            case .cannotDeleteRoot:
+                return "The root node cannot be deleted."
+            case .missingTree:
+                return "There is no valid JSON tree to edit."
+            }
+        }
     }
 
     var rawText: String = "" {
