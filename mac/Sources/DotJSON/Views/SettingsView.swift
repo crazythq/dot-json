@@ -20,6 +20,9 @@ struct SettingsView: View {
     @AppStorage(AppPreferences.StorageKey.defaultIndent)
     private var defaultIndentRaw: String = AppPreferences.DefaultIndentEncoding.fourSpaces.rawValue
 
+    @AppStorage(AppPreferences.StorageKey.autoCheckUpdates)
+    private var autoCheckUpdates: Bool = true
+
     var body: some View {
         Form {
             Section("General") {
@@ -32,6 +35,17 @@ struct SettingsView: View {
 
                 Button("Clear Recent Files") {
                     WorkspaceViewModel.shared?.clearRecentFiles()
+                }
+
+                Toggle(isOn: $autoCheckUpdates) {
+                    SettingsToggleLabels(
+                        title: "Check for Updates Automatically",
+                        subtitle: "When enabled, DotJSON checks GitHub Releases after launch."
+                    )
+                }
+
+                Button("Check for Updates…") {
+                    UpdatePromptCoordinator.shared.runManualCheck()
                 }
             }
 

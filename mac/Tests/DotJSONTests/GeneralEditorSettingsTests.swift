@@ -53,6 +53,20 @@ struct GeneralEditorSettingsTests {
         #expect(prefs.formatOnOpen == true)
         #expect(prefs.formatOnPaste == true)
         #expect(prefs.defaultIndent == .fourSpaces)
+        #expect(prefs.autoCheckUpdates == true)
+        #expect(prefs.skippedUpdateVersion == nil)
+    }
+
+    @Test func updatePreferencesRoundTrip() {
+        let defaults = isolatedDefaults()
+        let prefs = AppPreferences(defaults: defaults)
+        prefs.autoCheckUpdates = false
+        prefs.skippedUpdateVersion = "1.2.0"
+        #expect(prefs.autoCheckUpdates == false)
+        #expect(prefs.skippedUpdateVersion == "1.2.0")
+        prefs.clearPreferenceKeys()
+        #expect(prefs.autoCheckUpdates == true)
+        #expect(prefs.skippedUpdateVersion == nil)
     }
 
     @Test func sessionRestoreNeverFormatsEvenWhenFormatOnOpenEnabled() throws {
