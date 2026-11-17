@@ -8,6 +8,8 @@ struct AppPreferences {
         static let defaultIndent = "dotjson.defaultIndent"
         static let formatOnOpen = "dotjson.formatOnOpen"
         static let formatOnPaste = "dotjson.formatOnPaste"
+        static let autoCheckUpdates = "dotjson.autoCheckUpdates"
+        static let skippedUpdateVersion = "dotjson.skippedUpdateVersion"
     }
 
     enum DefaultIndentEncoding: String, Sendable {
@@ -81,11 +83,36 @@ struct AppPreferences {
         }
     }
 
+    var autoCheckUpdates: Bool {
+        get {
+            if defaults.object(forKey: StorageKey.autoCheckUpdates) == nil {
+                return true
+            }
+            return defaults.bool(forKey: StorageKey.autoCheckUpdates)
+        }
+        nonmutating set {
+            defaults.set(newValue, forKey: StorageKey.autoCheckUpdates)
+        }
+    }
+
+    var skippedUpdateVersion: String? {
+        get { defaults.string(forKey: StorageKey.skippedUpdateVersion) }
+        nonmutating set {
+            if let newValue {
+                defaults.set(newValue, forKey: StorageKey.skippedUpdateVersion)
+            } else {
+                defaults.removeObject(forKey: StorageKey.skippedUpdateVersion)
+            }
+        }
+    }
+
     /// Removes preference keys written by this type (does not touch workspace snapshot).
     func clearPreferenceKeys() {
         defaults.removeObject(forKey: StorageKey.restoreSession)
         defaults.removeObject(forKey: StorageKey.defaultIndent)
         defaults.removeObject(forKey: StorageKey.formatOnOpen)
         defaults.removeObject(forKey: StorageKey.formatOnPaste)
+        defaults.removeObject(forKey: StorageKey.autoCheckUpdates)
+        defaults.removeObject(forKey: StorageKey.skippedUpdateVersion)
     }
 }

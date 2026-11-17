@@ -6,6 +6,12 @@ struct DotJSONCommands: Commands {
     private var workspace: WorkspaceViewModel? { WorkspaceViewModel.shared }
 
     var body: some Commands {
+        CommandGroup(after: .appInfo) {
+            Button("Check for Updates…") {
+                UpdatePromptCoordinator.shared.runManualCheck()
+            }
+        }
+
         // Replace defaults so File menu stays English-only (no mixed CN leftovers).
         CommandGroup(replacing: .newItem) {
             Button("New") { workspace?.newTab() }

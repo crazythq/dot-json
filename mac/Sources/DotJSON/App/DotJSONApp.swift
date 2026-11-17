@@ -27,6 +27,7 @@ struct DotJSONApp: App {
             .preferredColorScheme(.dark)
             .onAppear {
                 NSApp.activate(ignoringOtherApps: true)
+                UpdatePromptCoordinator.shared.runAutomaticCheckIfNeeded()
             }
         }
         .windowStyle(.titleBar)
