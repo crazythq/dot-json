@@ -202,8 +202,9 @@ private struct FileAssociationToggleLabels: View {
 }
 
 
-/// Closes the hosting Settings window on Escape.
-/// Installed as a local key monitor while the Settings view is in a window.
+/// Configures the hosting Settings `NSWindow`: Escape closes it, and AppKit `.resizable`
+/// is inserted because SwiftUI `.windowResizability(.contentMinSize)` alone leaves
+/// Settings without that style mask bit.
 private struct SettingsEscapeKeyMonitor: NSViewRepresentable {
     func makeNSView(context: Context) -> SettingsEscapeKeyView {
         SettingsEscapeKeyView()
@@ -222,7 +223,9 @@ private final class SettingsEscapeKeyView: NSView {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         tearDownMonitor()
-        guard window != nil else { return }
+        guard let window else { return }
+        // SwiftUI Settings keeps styleMask without .resizable even under contentMinSize.
+        window.styleMask.insert(.resizable)
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             // keyCode 53 == Escape
             guard event.keyCode == 53 else { return event }

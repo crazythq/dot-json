@@ -51,6 +51,12 @@ struct FileAssociationSettingsTests {
         #expect(commands.contains("keyboardShortcut(\"w\", modifiers: .command)"))
     }
 
+    /// SwiftUI Settings 即使声明 contentMinSize 也不会给 NSWindow 加 .resizable；需 AppKit 补上。
+    @Test func settingsWindowEnablesAppKitResizableStyleMask() throws {
+        let settings = try String(contentsOf: dotJSONSource("Views/SettingsView.swift"), encoding: .utf8)
+        #expect(settings.contains("styleMask.insert(.resizable)"))
+    }
+
 
     @Test func infoPlistDeclaresJsonlWithoutOwningPublicJsonl() throws {
         let plistURL = macPackageRoot().appendingPathComponent("Info.plist")
