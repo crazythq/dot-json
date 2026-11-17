@@ -2,10 +2,26 @@ import SwiftUI
 import AppKit
 import DotJSONCore
 
+/// 树右键菜单项是否可用的纯规则，便于单测覆盖。
+enum TreeContextMenuValidation {
+    /// 展开/收起全部仅对容器节点可用。
+    static func allowsExpandCollapse(for item: JSONTree.Item) -> Bool {
+        item.node.isContainer
+    }
+
+    /// 删除仅对非根节点可用。
+    static func allowsDelete(for item: JSONTree.Item) -> Bool {
+        item.id != .root
+    }
+}
+
 /// 支持精确右键定位和焦点感知 Cmd+F 的树视图。
 final class ContextMenuOutlineView: NSOutlineView {
     /// 最近一次右键弹出时对应的行号；存在有效行时为 >= 0。
     var contextMenuRow: Int = -1
+
+    /// 右键弹出瞬间固定的树项快照，避免菜单停留期间行号漂移。
+    var contextMenuItemSnapshot: JSONTree.Item?
 
     /// 树拥有焦点并收到 Cmd+F 时调用。
     var onRequestFind: (() -> Void)?
@@ -32,7 +48,11 @@ final class ContextMenuOutlineView: NSOutlineView {
         let point = convert(event.locationInWindow, from: nil)
         let row = self.row(at: point)
         contextMenuRow = row
-        guard row >= 0, row < numberOfRows else { return nil }
+        guard row >= 0, row < numberOfRows else {
+            contextMenuItemSnapshot = nil
+            return nil
+        }
+        contextMenuItemSnapshot = item(atRow: row) as? JSONTree.Item
         selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
         return super.menu(for: event)
     }
@@ -251,37 +271,51 @@ struct TreeView: NSViewRepresentable {
         @objc private func expandAllUnderContext() {
             guard let item = contextMenuItem(),
                   let treeRoot = lastTreeRoot,
-                  item.node.isContainer else {
+                  let outlineView,
+                  TreeContextMenuValidation.allowsExpandCollapse(for: item) else {
                 return
             }
             let tree = JSONTree(root: treeRoot)
             let ids = tree.containerIDs(under: item.id)
+            guard let liveItem = tree.item(for: item.id) else { return }
             expansionState.expandAll(in: ids)
-            applyEffectiveExpansion(tree: tree)
+            isApplyingSystemExpansion = true
+            defer { isApplyingSystemExpansion = false }
+            outlineView.expandItem(liveItem, expandChildren: true)
+            lastAppliedExpandedIDs = expansionState.effectiveExpandedIDs
         }
 
         /// 收起右键节点及其全部已展开子孙。
         @objc private func collapseAllUnderContext() {
             guard let item = contextMenuItem(),
                   let treeRoot = lastTreeRoot,
-                  item.node.isContainer else {
+                  let outlineView,
+                  TreeContextMenuValidation.allowsExpandCollapse(for: item) else {
                 return
             }
             let tree = JSONTree(root: treeRoot)
             let ids = tree.containerIDs(under: item.id)
+            guard let liveItem = tree.item(for: item.id) else { return }
             expansionState.collapseAll(in: ids)
-            applyEffectiveExpansion(tree: tree)
+            isApplyingSystemExpansion = true
+            defer { isApplyingSystemExpansion = false }
+            outlineView.collapseItem(liveItem, collapseChildren: true)
+            lastAppliedExpandedIDs = expansionState.effectiveExpandedIDs
         }
 
         /// 确认后删除右键节点及其子内容。
         @objc private func deleteContextNode() {
             guard let item = contextMenuItem(),
-                  item.id != .root,
+                  TreeContextMenuValidation.allowsDelete(for: item),
                   let editorViewModel else {
                 return
             }
             presentDeleteConfirmation(for: item) {
-                try? editorViewModel.deleteNode(at: item.id)
+                do {
+                    try editorViewModel.deleteNode(at: item.id)
+                } catch {
+                    self.presentDeleteFailure(error)
+                }
             }
         }
 
@@ -290,15 +324,15 @@ struct TreeView: NSViewRepresentable {
             guard let item = contextMenuItem() else { return false }
             switch menuItem.action {
             case #selector(expandAllUnderContext), #selector(collapseAllUnderContext):
-                return item.node.isContainer
+                return TreeContextMenuValidation.allowsExpandCollapse(for: item)
             case #selector(deleteContextNode):
-                return item.id != .root
+                return TreeContextMenuValidation.allowsDelete(for: item)
             default:
                 return true
             }
         }
 
-        /// 弹出删除确认；优先以 sheet 挂在当前窗口上。
+        /// 弹出删除确认；Cancel 为默认按钮，优先挂在树所在窗口。
         private func presentDeleteConfirmation(
             for item: JSONTree.Item,
             onConfirm: @escaping () -> Void
@@ -308,27 +342,42 @@ struct TreeView: NSViewRepresentable {
             alert.messageText = "Delete \"\(item.key)\"?"
             alert.informativeText =
                 "This will permanently remove the node and all of its children from the document."
-            alert.addButton(withTitle: "Delete")
             alert.addButton(withTitle: "Cancel")
+            alert.addButton(withTitle: "Delete")
+            alert.buttons[1].hasDestructiveAction = true
 
-            if let window = NSApp.keyWindow {
+            if let window = outlineView?.window ?? NSApp.keyWindow {
                 alert.beginSheetModal(for: window) { response in
-                    guard response == .alertFirstButtonReturn else { return }
+                    guard response == .alertSecondButtonReturn else { return }
                     onConfirm()
                 }
             } else {
-                guard alert.runModal() == .alertFirstButtonReturn else { return }
+                guard alert.runModal() == .alertSecondButtonReturn else { return }
                 onConfirm()
             }
         }
 
-        /// 返回最近一次右键命中的真实树项。
+        /// 删除失败时给出可见提示，避免静默无反馈。
+        private func presentDeleteFailure(_ error: Error) {
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = "Couldn't Delete Node"
+            alert.informativeText = error.localizedDescription
+            alert.addButton(withTitle: "OK")
+
+            if let window = outlineView?.window ?? NSApp.keyWindow {
+                alert.beginSheetModal(for: window)
+            } else {
+                alert.runModal()
+            }
+        }
+
+        /// 返回右键弹出时固定的树项快照。
         private func contextMenuItem() -> JSONTree.Item? {
-            guard let contextView = outlineView as? ContextMenuOutlineView,
-                  contextView.contextMenuRow >= 0 else {
+            guard let contextView = outlineView as? ContextMenuOutlineView else {
                 return nil
             }
-            return contextView.item(atRow: contextView.contextMenuRow) as? JSONTree.Item
+            return contextView.contextMenuItemSnapshot
         }
 
         /// 把最新树结构和搜索状态增量同步到 NSOutlineView。

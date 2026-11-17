@@ -484,4 +484,39 @@ struct EditorViewModelTests {
         }
         #expect(vm.rawText == before)
     }
+
+    @Test func deleteNestedPathUpdatesRawText() throws {
+        let vm = EditorViewModel()
+        vm.rawText = #"{"outer":{"inner":{"gone":1},"keep":2}}"#
+
+        try vm.deleteNode(at: TreeNodeID(components: [.key("outer"), .key("inner")]))
+
+        #expect(vm.rawText == """
+        {
+            "outer": {
+                "keep": 2
+            }
+        }
+        """)
+    }
+
+    @Test func deletePreservesSiblingBranches() throws {
+        let vm = EditorViewModel()
+        vm.rawText = #"{"a":{"x":1},"b":{"y":2}}"#
+
+        try vm.deleteNode(at: TreeNodeID(components: [.key("a")]))
+
+        #expect(vm.rawText.contains(#""b""#))
+        #expect(vm.rawText.contains(#""y""#))
+        #expect(!vm.rawText.contains(#""a""#))
+        #expect(!vm.rawText.contains(#""x""#))
+    }
+
+    @Test func deleteWithoutTreeThrowsMissingTree() {
+        let vm = EditorViewModel()
+
+        #expect(throws: EditorViewModel.NodeEditError.missingTree) {
+            try vm.deleteNode(at: TreeNodeID(components: [.key("a")]))
+        }
+    }
 }
