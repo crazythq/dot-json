@@ -35,6 +35,8 @@ struct FileAssociationSettingsTests {
         #expect(!settingsSource.contains("Restore Previous App"))
         #expect(settingsSource.contains("Section(\"General\")"))
         #expect(settingsSource.contains("Section(\"Editor\")"))
+        #expect(settingsSource.contains(".frame(minWidth: 360, minHeight: 300)"))
+        #expect(!settingsSource.contains(".frame(minWidth: 420, minHeight: 360)"))
     }
 
 

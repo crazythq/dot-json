@@ -38,6 +38,8 @@ struct DotJSONApp: App {
         Settings {
             SettingsView()
         }
+        .defaultSize(width: 480, height: 420)
+        .windowResizability(.contentMinSize)
         .onChange(of: NSApplication.shared.keyWindow?.isKeyWindow ?? false) { _, isKey in
             if !isKey {
                 workspace.persistSession()

@@ -90,7 +90,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(minWidth: 420, minHeight: 360)
+        .frame(minWidth: 360, minHeight: 300)
         // Form rarely becomes first-responder, so onExitCommand alone misses Esc.
         .background(SettingsEscapeKeyMonitor())
         .onAppear {

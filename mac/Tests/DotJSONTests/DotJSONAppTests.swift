@@ -17,16 +17,36 @@ struct DotJSONAppTests {
         return try String(contentsOf: sourceURL, encoding: .utf8)
     }
 
-    /// 验证应用只设置默认窗口尺寸，不限制用户可缩放的最小宽高。
+    /// 验证主窗口只设置默认尺寸，不限制用户可缩放的最小宽高。
+    /// Settings 场景允许 `.windowResizability(.contentMinSize)`，故断言只看 WindowGroup 段。
     ///
     /// - Throws: 无法读取 App 源码时抛出文件读取错误。
     @Test func appSetsDefaultWindowSizeWithoutMinimumSizeConstraints() throws {
         let source = try appSource()
 
         #expect(source.contains(".defaultSize(width: 900, height: 760)"))
-        #expect(!source.contains(".frame(minWidth:"))
-        #expect(!source.contains("minHeight:"))
-        #expect(!source.contains(".windowResizability(.contentMinSize)"))
+
+        let windowGroupRange = try #require(source.range(of: "WindowGroup {"))
+        let settingsRange = try #require(source.range(of: "Settings {"))
+        let windowGroupSection = String(source[windowGroupRange.lowerBound..<settingsRange.lowerBound])
+
+        #expect(!windowGroupSection.contains(".frame(minWidth:"))
+        #expect(!windowGroupSection.contains("minHeight:"))
+        #expect(!windowGroupSection.contains(".windowResizability(.contentMinSize)"))
+    }
+
+    /// 验证 Settings 场景允许按内容最小尺寸缩放，并给出首次默认尺寸。
+    ///
+    /// - Throws: 无法读取 App 源码时抛出文件读取错误。
+    @Test func settingsSceneIsResizableWithDefaultSize() throws {
+        let source = try appSource()
+
+        let settingsRange = try #require(source.range(of: "Settings {"))
+        let settingsSection = String(source[settingsRange.lowerBound...])
+
+        #expect(settingsSection.contains("SettingsView()"))
+        #expect(settingsSection.contains(".defaultSize(width: 480, height: 420)"))
+        #expect(settingsSection.contains(".windowResizability(.contentMinSize)"))
     }
 
     /// 验证窗口外观只在绑定窗口时固定为深色，不在 resize 时重复改写动态颜色。
