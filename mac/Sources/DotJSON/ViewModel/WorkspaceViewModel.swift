@@ -38,6 +38,8 @@ final class WorkspaceViewModel {
     var diffViewModel: DiffViewModel?
     var isDiffPresented = false
     private var isRestoringSession = true
+    /// 合并连续切签时的会话落盘任务。
+    private var persistSessionTask: Task<Void, Never>?
     /// 下一个未命名标签页使用的序号（本次运行内单调递增）。
     private var nextUntitledNumber = 1
 
@@ -153,8 +155,21 @@ final class WorkspaceViewModel {
 
     func activateTab(at index: Int) {
         guard tabs.indices.contains(index) else { return }
+        guard activeTabIndex != index else { return }
         activeTabIndex = index
-        persistSession()
+        // 切签只改 activeIndex；会话落盘挪到下一拍，避免点签同步卡主线程。
+        schedulePersistSession()
+    }
+
+    /// 将会话持久化推迟到当前主线程回合之后，合并连续切签写入。
+    private func schedulePersistSession() {
+        guard !isRestoringSession else { return }
+        persistSessionTask?.cancel()
+        persistSessionTask = Task { @MainActor in
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+            self.persistSession()
+        }
     }
 
     /// Reorder tabs; active selection follows the same `EditorViewModel` instance (tab id), not index.

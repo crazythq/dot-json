@@ -85,6 +85,29 @@ struct TabBarView: View {
                         .frame(width: 2, height: 20)
                         .position(x: lineX - barGlobalFrame.minX, y: Self.barHeight / 2)
                 }
+
+                // 未拖拽时不挂 TimelineView，避免静止切签仍被时间线调度。
+                if draggingTabId != nil {
+                    TimelineView(
+                        .animation(
+                            minimumInterval: Self.autoScrollInterval,
+                            paused: autoScrollDirection == 0 || dragCancelled
+                        )
+                    ) { context in
+                        Color.clear
+                            .onChange(of: context.date) { _, _ in
+                                guard autoScrollDirection != 0,
+                                      draggingTabId != nil,
+                                      !dragCancelled else { return }
+                                performAutoScrollStep(
+                                    direction: autoScrollDirection,
+                                    scrollProxy: scrollProxy
+                                )
+                            }
+                    }
+                    .frame(width: 0, height: 0)
+                    .accessibilityHidden(true)
+                }
             }
             .onPreferenceChange(TabBarItemFrameKey.self) { tabFrames = $0 }
             .onChange(of: dragGlobalLocation) { _, _ in
@@ -99,14 +122,6 @@ struct TabBarView: View {
                 if id == nil {
                     stopAutoScroll()
                 }
-            }
-            .onReceive(
-                Timer.publish(every: Self.autoScrollInterval, on: .main, in: .common).autoconnect()
-            ) { _ in
-                guard autoScrollDirection != 0,
-                      draggingTabId != nil,
-                      !dragCancelled else { return }
-                performAutoScrollStep(direction: autoScrollDirection, scrollProxy: scrollProxy)
             }
         }
         .frame(height: Self.barHeight)
@@ -250,6 +265,12 @@ private struct TabBarItemFrameKey: PreferenceKey {
     }
 }
 
+/// 标签单击切签与双击改名的时间参数（可供测试读取）。
+enum TabBarRenameTiming {
+    /// 两次点击落在此间隔内视为双击改名；单击切换在第一次点击时立即生效。
+    static let doubleTapInterval: TimeInterval = 0.35
+}
+
 /// 单个标签页项。
 private struct TabBarItemView: View {
     @Environment(WorkspaceViewModel.self) private var workspace
@@ -267,6 +288,8 @@ private struct TabBarItemView: View {
     @State private var isHovering = false
     @State private var isEditingTitle = false
     @State private var editingTitle = ""
+    /// 最近一次单击时间；用于本地识别双击改名，避免系统双击手势拖住单击切换。
+    @State private var lastActivationTapAt: Date?
     @FocusState private var titleFieldFocused: Bool
 
     private var tabIndex: Int? {
@@ -305,14 +328,8 @@ private struct TabBarItemView: View {
                     .contentShape(Rectangle())
                     .onTapGesture {
                         guard !suppressTabActivation, !dragExceededThreshold else { return }
-                        activateTabIfPossible()
+                        handleTitleTap()
                     }
-                    .highPriorityGesture(
-                        TapGesture(count: 2).onEnded {
-                            guard !isDragging else { return }
-                            beginRename()
-                        }
-                    )
                     .gesture(reorderDragGesture, including: isEditingTitle ? .none : .all)
             }
 
@@ -416,6 +433,20 @@ private struct TabBarItemView: View {
     private func activateTabIfPossible() {
         guard let tabIndex else { return }
         workspace.activateTab(at: tabIndex)
+    }
+
+    /// 单击立即切签；短间隔内第二次点击才进入改名，不再使用会延迟单击的系统双击手势。
+    private func handleTitleTap() {
+        let now = Date()
+        if let lastActivationTapAt,
+           now.timeIntervalSince(lastActivationTapAt) <= TabBarRenameTiming.doubleTapInterval,
+           !isDragging {
+            self.lastActivationTapAt = nil
+            beginRename()
+            return
+        }
+        lastActivationTapAt = now
+        activateTabIfPossible()
     }
 
     private func closeTabIfPossible() {

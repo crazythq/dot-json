@@ -154,6 +154,7 @@ struct TextEditorViewTests {
         let source = try String(contentsOf: sourceURL, encoding: .utf8)
 
         #expect(source.contains("context.coordinator.viewModel = viewModel"))
+        #expect(source.contains("if textView.string != viewModel.rawText"))
     }
 
     @Test func textViewConfiguresAResizableScrollableDocument() {
@@ -299,6 +300,32 @@ struct TextEditorViewTests {
         #expect(textView.frame == scrollAdjustedFrame)
     }
 
+    /// 切换到内容相同的标签（含空白标签）时，不得再次强制整页 document 重排。
+    ///
+    /// `updateNSView` 每次切签都会调用 `synchronizeTextView`；若文本与视口都未变仍走
+    /// `updateDocumentSize`，会重复 `invalidateTextLayout`，表现为空白标签来回切也卡顿。
+    @Test func synchronizeSkipsFullDocumentRelayoutWhenTextAndViewportUnchanged() {
+        let viewModel = EditorViewModel()
+        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 400, height: 300))
+        let textView = JSONTextView()
+        let coordinator = TextEditorView.Coordinator(viewModel: viewModel)
+        textView.configureForScrolling()
+        scrollView.documentView = textView
+
+        coordinator.synchronizeTextView(textView, rawText: "", in: scrollView)
+        let preservedFrame = NSRect(
+            x: textView.frame.origin.x,
+            y: -40,
+            width: textView.frame.width,
+            height: textView.frame.height
+        )
+        textView.frame = preservedFrame
+
+        coordinator.synchronizeTextView(textView, rawText: "", in: scrollView)
+
+        #expect(textView.frame == preservedFrame)
+    }
+
     @Test func treeReloadPublishesRootBeforeDataSourceIsQueried() throws {
         let viewModel = EditorViewModel()
         viewModel.rawText = #"{"features":{"tree":true},"items":[1,2,3]}"#
@@ -378,6 +405,10 @@ struct TextEditorViewTests {
 
         #expect(ruler.errorLineNumber == 3)
         #expect(ruler.errorMessage == "Invalid value")
+
+        ruler.needsDisplay = false
+        ruler.updateError(lineNumber: 3, message: "Invalid value")
+        #expect(!ruler.needsDisplay)
     }
 
     @Test func lineNumberGutterUsesTopOriginCoordinates() {

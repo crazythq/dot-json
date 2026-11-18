@@ -5,6 +5,41 @@ import Testing
 
 struct TabBarAutoScrollLogicTests {
 
+    /// 自动滚动节拍必须可暂停，不能在静止切签时用常驻 Timer 打主线程。
+    @Test func tabBarAutoScrollUsesPausedTimelineInsteadOfAlwaysOnTimer() throws {
+        let sourceURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/DotJSON/Views/TabBarView.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+
+        #expect(source.contains("TimelineView("))
+        #expect(source.contains("if draggingTabId != nil"))
+        #expect(!source.contains("Timer.publish("))
+    }
+
+    /// 单击切签不得使用系统双击手势，否则会等待双击判定窗口（约 300–500ms）。
+    @Test func tabBarActivationDoesNotWaitForSystemDoubleTapGesture() throws {
+        let sourceURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/DotJSON/Views/TabBarView.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+
+        #expect(source.contains("handleTitleTap()"))
+        #expect(source.contains("TabBarRenameTiming.doubleTapInterval"))
+        #expect(!source.contains("TapGesture(count: 2)"))
+        #expect(!source.contains("highPriorityGesture("))
+    }
+
+    @Test func tabBarRenameDoubleTapIntervalIsBelowHalfSecond() {
+        #expect(TabBarRenameTiming.doubleTapInterval < 0.5)
+        #expect(TabBarRenameTiming.doubleTapInterval > 0)
+    }
+
+
     @Test func towardLeadingPicksRightmostTabCutOffOnLeadingSide() {
         let ids = (0..<4).map { _ in UUID() }
         let clip = CGRect(x: 100, y: 0, width: 300, height: 32)
