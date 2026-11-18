@@ -44,7 +44,11 @@ final class LineNumberRulerView: NSView, NSViewToolTipOwner {
     ///   - lineNumber: 从 1 开始的错误行；0 表示清除标记。
     ///   - message: 对应的解析错误说明。
     func updateError(lineNumber: Int, message: String?) {
-        errorLineNumber = max(0, lineNumber)
+        let normalizedLine = max(0, lineNumber)
+        guard errorLineNumber != normalizedLine || errorMessage != message else {
+            return
+        }
+        errorLineNumber = normalizedLine
         errorMessage = message
         needsDisplay = true
     }

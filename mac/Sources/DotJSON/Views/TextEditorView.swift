@@ -328,13 +328,16 @@ struct TextEditorView: NSViewRepresentable {
         // 必须在这里把最新环境同步给 Coordinator，否则 onPaste/textDidChange
         // 等回调会一直路由到第一个标签页的 ViewModel。
         context.coordinator.viewModel = viewModel
-        context.coordinator.synchronizeTextView(
-            textView,
-            rawText: viewModel.rawText,
-            searchResults: viewModel.searchResults,
-            activeSearchIndex: viewModel.activeSearchIndex,
-            in: scrollView
-        )
+        // 空白签或内容相同的签来回切时，NSTextView 已是目标文本，跳过同步避免主线程空转。
+        if textView.string != viewModel.rawText {
+            context.coordinator.synchronizeTextView(
+                textView,
+                rawText: viewModel.rawText,
+                searchResults: viewModel.searchResults,
+                activeSearchIndex: viewModel.activeSearchIndex,
+                in: scrollView
+            )
+        }
         context.coordinator.lineNumberRulerView?.updateError(
             lineNumber: viewModel.errorLineNumber,
             message: viewModel.errorMessage
@@ -410,6 +413,8 @@ struct TextEditorView: NSViewRepresentable {
         ///   - textView: 当前承载 JSON 输入的 AppKit 文本视图。
         ///   - rawText: `EditorViewModel` 中的最新原始 JSON 文本。
         ///   - scrollView: 承载文本视图的滚动容器，用于更新 document view 尺寸。
+        ///
+        /// 文本未变时只做主题校正与视口差量布局，避免每次切签都 `invalidateTextLayout`。
         func synchronizeTextView(
             _ textView: JSONTextView,
             rawText: String,
@@ -419,10 +424,12 @@ struct TextEditorView: NSViewRepresentable {
         ) {
             if textView.string != rawText {
                 textView.setPlainText(rawText)
+                textView.updateDocumentSize(in: scrollView)
+                lastDocumentLayoutViewportSize = scrollView.contentView.bounds.size
+            } else {
+                textView.applyThemeAttributesToCurrentText()
+                updateDocumentSizeIfViewportChanged(textView, in: scrollView)
             }
-            textView.applyThemeAttributesToCurrentText()
-            textView.updateDocumentSize(in: scrollView)
-            lastDocumentLayoutViewportSize = scrollView.contentView.bounds.size
             lineNumberRulerView?.needsDisplay = true
         }
 

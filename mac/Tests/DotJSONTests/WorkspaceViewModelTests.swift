@@ -320,6 +320,20 @@ struct WorkspaceViewModelTests {
         #expect(ws.tabs.map(\.id) == [ids[1], ids[2], ids[0]])
     }
 
+    @Test func activateTabIgnoresSameIndex() {
+        let ws = WorkspaceViewModel()
+        ws.closeAllTabs()
+        ws.newTab()
+        ws.newTab()
+        ws.activateTab(at: 1)
+        let activeId = ws.tabs[1].id
+
+        ws.activateTab(at: 1)
+
+        #expect(ws.activeTabIndex == 1)
+        #expect(ws.tabs[ws.activeTabIndex].id == activeId)
+    }
+
     /// When a non-dragged tab stays active, reorder must not change which document is active.
     @Test func moveTabKeepsActiveTabByIdWhenDraggingOtherTab() {
         let ws = WorkspaceViewModel()
