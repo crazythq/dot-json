@@ -21,6 +21,8 @@
           </select>
         </label>
         <button type="button" id="btn-repair" title="尝试修复 Python/AI 风格 JSON">修复</button>
+        <button type="button" id="btn-to-python" title="转为 Python 字面量">转 Python</button>
+        <button type="button" id="btn-to-json" title="转为标准 JSON">转 JSON</button>
       </div>
       <div class="toolbar-group">
         <button type="button" id="btn-clear" title="清空">清空</button>
@@ -29,6 +31,8 @@
       </div>
       <div class="toolbar-group">
         <button type="button" id="btn-open" title="打开文件">打开</button>
+        <button type="button" id="btn-save" title="保存">保存</button>
+        <button type="button" id="btn-save-as" title="另存为">另存为</button>
         <button type="button" id="btn-export" title="导出到文件">导出</button>
       </div>
       <div class="status" id="status" aria-live="polite">就绪</div>
@@ -36,9 +40,23 @@
 
     <main class="panes">
       <section class="pane pane-editor" aria-label="文本编辑">
-        <div class="pane-header">
+        <div class="pane-header editor-header">
           <span>文本</span>
-          <span id="file-label" class="file-label"></span>
+          <span class="file-meta">
+            <span id="dirty-mark" class="dirty-mark" hidden>•</span>
+            <span id="file-label" class="file-label"></span>
+          </span>
+          <div class="editor-search" id="editor-search-bar">
+            <input
+              id="editor-search"
+              type="search"
+              placeholder="查找"
+              autocomplete="off"
+            />
+            <button type="button" id="editor-search-prev" title="上一个">↑</button>
+            <button type="button" id="editor-search-next" title="下一个">↓</button>
+            <span id="editor-search-count" class="search-count"></span>
+          </div>
         </div>
         <textarea
           id="editor"
@@ -75,9 +93,14 @@
     <li data-action="copy-key">Copy Key</li>
     <li data-action="copy-value">Copy Value</li>
     <li data-action="copy-path">Copy JSON Path</li>
+    <li data-action="expand-all">Expand All</li>
+    <li data-action="collapse-all">Collapse All</li>
+    <li data-action="delete-node">Delete Node</li>
   </ul>
 
   <script src="lib/json-core.js"></script>
+  <script src="lib/python-literal.js"></script>
+  <script src="lib/tree-edit.js"></script>
   <script src="state/document.js"></script>
   <script src="app/main.js"></script>
 </body>

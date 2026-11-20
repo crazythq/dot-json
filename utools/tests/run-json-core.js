@@ -108,6 +108,15 @@ assertEqual(core.copyValueText(name), "Alice", "copyValue strips string quotes")
 const arr = core.buildRootTree("[10,20]");
 assertEqual(arr.root.children[0].jsonPath, "$[0]", "array index path");
 
+// —— parseErrorLine（V8 position → 行号）——
+assertEqual(core.parseErrorLine("{invalid"), 1, "error line");
+assertEqual(
+  core.parseErrorLine('{\n  "a": 1,\n  invalid\n}'),
+  3,
+  "error line multiline"
+);
+assertEqual(core.parseErrorLine(""), null, "error line empty returns null");
+
 if (failed) {
   console.error(`\n${failed} failed`);
   process.exit(1);

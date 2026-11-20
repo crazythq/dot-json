@@ -3,6 +3,8 @@
 
   const core = window.DotJSONCore;
   const Doc = window.DotJSONDocument;
+  const py = window.DotJSONPython;
+  const treeEdit = window.DotJSONTreeEdit;
   const services = window.services;
 
   const doc = Doc.create();
@@ -15,6 +17,8 @@
     indent: document.getElementById("indent-select"),
     treeSearch: document.getElementById("tree-search"),
     searchCount: document.getElementById("search-count"),
+    editorSearch: document.getElementById("editor-search"),
+    editorSearchCount: document.getElementById("editor-search-count"),
     menu: document.getElementById("context-menu"),
     splitter: document.getElementById("splitter"),
     editorPane: document.querySelector(".pane-editor"),
@@ -27,8 +31,12 @@
     contextNodeId: null,
     matches: [],
     matchIndex: -1,
+    editorMatches: [],
+    editorMatchIndex: -1,
     searchTimer: null,
+    editorSearchTimer: null,
     parseTimer: null,
+    lastParseOk: true,
   };
 
   Doc.setIndent(doc, els.indent.value);
@@ -42,6 +50,16 @@
 
   function syncFileLabel() {
     els.fileLabel.textContent = doc.fileName || "";
+  }
+
+  function updateDirtyMark() {
+    const mark = document.getElementById("dirty-mark");
+    if (mark) mark.hidden = !doc.isDirty;
+  }
+
+  function markProgrammaticDirty() {
+    Doc.markDirty(doc);
+    updateDirtyMark();
   }
 
   function copyText(text) {
@@ -81,6 +99,7 @@
     if (options.filePath || options.clearFile) {
       Doc.markSaved(doc);
     }
+    updateDirtyMark();
     scheduleParse(options.immediate);
   }
 
@@ -99,6 +118,7 @@
       state.root = null;
       state.matches = [];
       state.matchIndex = -1;
+      state.lastParseOk = true;
       els.tree.innerHTML = '<div class="tree-empty">输入 JSON 后在此显示树结构</div>';
       setStatus("空文档");
       updateSearchCount();
@@ -110,13 +130,19 @@
       state.root = null;
       state.matches = [];
       state.matchIndex = -1;
-      els.tree.innerHTML = `<div class="tree-error">解析失败\n${escapeHtml(built.error)}</div>`;
-      setStatus(built.error, "error");
+      const line = core.parseErrorLine(text);
+      const lineHint = line != null ? `line ${line}` : null;
+      const detail = lineHint ? `${built.error}\n${lineHint}` : built.error;
+      els.tree.innerHTML = `<div class="tree-error">解析失败\n${escapeHtml(detail)}</div>`;
+      setStatus(lineHint ? `${built.error} (${lineHint})` : built.error, "error");
+      if (line != null && state.lastParseOk) selectEditorLine(line);
+      state.lastParseOk = false;
       updateSearchCount();
       return;
     }
 
     state.root = built.root;
+    state.lastParseOk = true;
     if (!state.expanded.has("0")) state.expanded.add("0");
     renderTree();
     applySearch(els.treeSearch.value, { silent: true });
@@ -238,6 +264,110 @@
     renderTree();
   }
 
+  function collectEditorOffsets(text, query) {
+    const offsets = [];
+    if (!query) return offsets;
+    let from = 0;
+    while (from <= text.length) {
+      const idx = text.indexOf(query, from);
+      if (idx === -1) break;
+      offsets.push(idx);
+      from = idx + query.length;
+      if (query.length === 0) break;
+    }
+    return offsets;
+  }
+
+  function updateEditorSearchCount() {
+    const query = els.editorSearch.value;
+    if (!query) {
+      els.editorSearchCount.textContent = "";
+      return;
+    }
+    if (!state.editorMatches.length) {
+      els.editorSearchCount.textContent = "0/0";
+      return;
+    }
+    els.editorSearchCount.textContent = `${state.editorMatchIndex + 1}/${state.editorMatches.length}`;
+  }
+
+  function scrollEditorToOffset(offset) {
+    const text = els.editor.value;
+    const before = text.slice(0, offset);
+    const lineIndex = before.split("\n").length - 1;
+    const style = window.getComputedStyle(els.editor);
+    const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.4 || 18;
+    const paddingTop = parseFloat(style.paddingTop) || 0;
+    const viewLines = Math.max(1, Math.floor(els.editor.clientHeight / lineHeight));
+    const targetTop = paddingTop + lineIndex * lineHeight - lineHeight * Math.floor(viewLines / 3);
+    els.editor.scrollTop = Math.max(0, targetTop);
+  }
+
+  /** 选中 textarea 中 1-based 行（尽力滚动到可视区）。 */
+  function selectEditorLine(line) {
+    if (line == null || line < 1) return;
+    const text = els.editor.value;
+    const lines = text.split("\n");
+    const index = Math.min(line - 1, lines.length - 1);
+    let start = 0;
+    for (let i = 0; i < index; i += 1) {
+      start += lines[i].length + 1;
+    }
+    const end = start + (lines[index] ? lines[index].length : 0);
+    try {
+      els.editor.focus();
+      els.editor.setSelectionRange(start, end);
+      scrollEditorToOffset(start);
+    } catch (_err) {
+      /* ignore selection failures in headless contexts */
+    }
+  }
+
+  function selectEditorMatch(index) {
+    const query = els.editorSearch.value;
+    const start = state.editorMatches[index];
+    if (start == null || !query) return;
+    const end = start + query.length;
+    els.editor.focus();
+    els.editor.setSelectionRange(start, end);
+    scrollEditorToOffset(start);
+  }
+
+  function applyEditorSearch(query, opts) {
+    const options = opts || {};
+    const q = query == null ? "" : String(query);
+    state.editorMatches = [];
+    state.editorMatchIndex = -1;
+    if (!q) {
+      updateEditorSearchCount();
+      return;
+    }
+    state.editorMatches = collectEditorOffsets(els.editor.value, q);
+    if (state.editorMatches.length) {
+      state.editorMatchIndex = 0;
+      if (!options.silent) selectEditorMatch(0);
+    }
+    updateEditorSearchCount();
+  }
+
+  function gotoEditorMatch(delta) {
+    const query = els.editorSearch.value;
+    if (!query) return;
+    state.editorMatches = collectEditorOffsets(els.editor.value, query);
+    if (!state.editorMatches.length) {
+      state.editorMatchIndex = -1;
+      updateEditorSearchCount();
+      return;
+    }
+    if (state.editorMatchIndex < 0) state.editorMatchIndex = 0;
+    else {
+      state.editorMatchIndex =
+        (state.editorMatchIndex + delta + state.editorMatches.length) % state.editorMatches.length;
+    }
+    selectEditorMatch(state.editorMatchIndex);
+    updateEditorSearchCount();
+  }
+
   function formatEditor() {
     try {
       const indent = els.indent.value;
@@ -248,6 +378,7 @@
         text = core.format(core.repair(text), indent);
       }
       setEditorText(text, { immediate: true });
+      markProgrammaticDirty();
       setStatus("已格式化", "ok");
     } catch (err) {
       setStatus(err.message || String(err), "error");
@@ -263,6 +394,7 @@
         text = core.minify(core.repair(text));
       }
       setEditorText(text, { immediate: true });
+      markProgrammaticDirty();
       setStatus("已压缩", "ok");
     } catch (err) {
       setStatus(err.message || String(err), "error");
@@ -275,7 +407,30 @@
       const indent = els.indent.value;
       const formatted = core.format(repaired, indent);
       setEditorText(formatted, { immediate: true });
+      markProgrammaticDirty();
       setStatus("已修复并格式化", "ok");
+    } catch (err) {
+      setStatus(err.message || String(err), "error");
+    }
+  }
+
+  function toPythonEditor() {
+    try {
+      const text = py.toPython(els.editor.value, doc.indentKey);
+      setEditorText(text, { immediate: true });
+      markProgrammaticDirty();
+      setStatus("已转为 Python", "ok");
+    } catch (err) {
+      setStatus(err.message || String(err), "error");
+    }
+  }
+
+  function toJSONEditor() {
+    try {
+      const text = py.toJSON(els.editor.value, doc.indentKey);
+      setEditorText(text, { immediate: true });
+      markProgrammaticDirty();
+      setStatus("已转为 JSON", "ok");
     } catch (err) {
       setStatus(err.message || String(err), "error");
     }
@@ -296,9 +451,11 @@
         text = core.format(core.repair(clip), indent);
       }
       setEditorText(text, { immediate: true });
+      markProgrammaticDirty();
       setStatus("已粘贴并格式化", "ok");
     } catch (err) {
       setEditorText(clip, { immediate: true });
+      markProgrammaticDirty();
       setStatus("已粘贴（未格式化）", "error");
     }
   }
@@ -324,23 +481,48 @@
   // —— events ——
   els.editor.addEventListener("input", () => {
     Doc.setText(doc, els.editor.value, { markDirty: true });
+    updateDirtyMark();
     scheduleParse(false);
+    if (els.editorSearch.value) applyEditorSearch(els.editorSearch.value, { silent: true });
   });
 
   els.editor.addEventListener("keydown", (event) => {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
-      // 左侧保持浏览器原生查找
+      event.preventDefault();
+      els.editorSearch.focus();
+      els.editorSearch.select();
       return;
     }
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
       event.preventDefault();
-      document.getElementById("btn-export").click();
+      saveDocument();
     }
   });
+
+  els.editorSearch.addEventListener("input", () => {
+    clearTimeout(state.editorSearchTimer);
+    state.editorSearchTimer = setTimeout(() => applyEditorSearch(els.editorSearch.value), 120);
+  });
+
+  els.editorSearch.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      if (!state.editorMatches.length) applyEditorSearch(els.editorSearch.value);
+      else gotoEditorMatch(event.shiftKey ? -1 : 1);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      els.editor.focus();
+    }
+  });
+
+  document.getElementById("editor-search-prev").addEventListener("click", () => gotoEditorMatch(-1));
+  document.getElementById("editor-search-next").addEventListener("click", () => gotoEditorMatch(1));
 
   document.getElementById("btn-format").addEventListener("click", formatEditor);
   document.getElementById("btn-minify").addEventListener("click", minifyEditor);
   document.getElementById("btn-repair").addEventListener("click", repairEditor);
+  document.getElementById("btn-to-python").addEventListener("click", toPythonEditor);
+  document.getElementById("btn-to-json").addEventListener("click", toJSONEditor);
   document.getElementById("btn-clear").addEventListener("click", () => {
     setEditorText("", { clearFile: true, immediate: true });
     setStatus("已清空");
@@ -389,6 +571,53 @@
     }
   }
 
+  function saveDocumentAs() {
+    if (!window.utools || typeof utools.showSaveDialog !== "function" || !services) {
+      setStatus("当前环境不支持另存为", "error");
+      return;
+    }
+    try {
+      const saved = utools.showSaveDialog({
+        title: "另存为",
+        defaultPath: doc.fileName || "untitled.json",
+        filters: [
+          { name: "JSON", extensions: ["json"] },
+          { name: "All Files", extensions: ["*"] },
+        ],
+      });
+      if (!saved) return;
+      services.writeTextFile(saved, els.editor.value);
+      Doc.setText(doc, els.editor.value, { markDirty: false });
+      Doc.setFile(doc, {
+        filePath: saved,
+        fileName: saved.split(/[/\\]/).pop(),
+      });
+      Doc.markSaved(doc);
+      syncFileLabel();
+      updateDirtyMark();
+      setStatus(`已另存为 ${doc.fileName}`, "ok");
+    } catch (err) {
+      setStatus(`另存为失败: ${err.message || err}`, "error");
+    }
+  }
+
+  function saveDocument() {
+    if (!doc.filePath) return saveDocumentAs();
+    if (!services || typeof services.writeTextFile !== "function") {
+      setStatus("当前环境不支持保存", "error");
+      return;
+    }
+    try {
+      services.writeTextFile(doc.filePath, els.editor.value);
+      Doc.setText(doc, els.editor.value, { markDirty: false });
+      Doc.markSaved(doc);
+      updateDirtyMark();
+      setStatus(`已保存 ${doc.fileName}`, "ok");
+    } catch (err) {
+      setStatus(`保存失败: ${err.message || err}`, "error");
+    }
+  }
+
   function exportJsonViaDialog() {
     if (!window.utools || typeof utools.showSaveDialog !== "function" || !services) {
       copyText(els.editor.value);
@@ -412,6 +641,7 @@
       });
       Doc.markSaved(doc);
       syncFileLabel();
+      updateDirtyMark();
       setStatus(`已导出 ${doc.fileName}`, "ok");
     } catch (err) {
       setStatus(`导出失败: ${err.message || err}`, "error");
@@ -419,6 +649,8 @@
   }
 
   document.getElementById("btn-open").addEventListener("click", openJsonViaDialog);
+  document.getElementById("btn-save").addEventListener("click", saveDocument);
+  document.getElementById("btn-save-as").addEventListener("click", saveDocumentAs);
   document.getElementById("btn-export").addEventListener("click", exportJsonViaDialog);
 
   els.indent.addEventListener("change", () => {
@@ -498,6 +730,45 @@
     } else if (action === "copy-path") {
       copyText(node.jsonPath);
       setStatus("已复制 JSON Path", "ok");
+    } else if (action === "expand-all") {
+      if (!state.root) return;
+      treeEdit.descendantIds(state.root, node.id).forEach((id) => state.expanded.add(id));
+      renderTree();
+      setStatus("已全部展开", "ok");
+    } else if (action === "collapse-all") {
+      if (!state.root) return;
+      const ids = treeEdit.descendantIds(state.root, node.id);
+      ids.forEach((id) => {
+        if (id === "0") return;
+        state.expanded.delete(id);
+      });
+      if (!state.expanded.has("0")) state.expanded.add("0");
+      renderTree();
+      setStatus("已全部收起", "ok");
+    } else if (action === "delete-node") {
+      if (!state.root) return;
+      if (node.id === "0" || node.id === state.root.id) {
+        setStatus("无法删除根节点", "error");
+        return;
+      }
+      if (!window.confirm("删除该节点及其子节点？")) return;
+      const result = treeEdit.deleteNodeById(state.root, node.id);
+      if (!result.ok) {
+        setStatus(
+          result.error === "cannotDeleteRoot" ? "无法删除根节点" : result.error || "删除失败",
+          "error"
+        );
+        return;
+      }
+      try {
+        const text = core.format(JSON.stringify(result.value), els.indent.value);
+        setEditorText(text, { immediate: true });
+        markProgrammaticDirty();
+        if (state.selectedId === node.id) state.selectedId = null;
+        setStatus("已删除节点", "ok");
+      } catch (err) {
+        setStatus(err.message || String(err), "error");
+      }
     }
   });
 

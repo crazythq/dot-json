@@ -149,6 +149,21 @@ body {
   background: #1a1a1a;
 }
 
+.file-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 70%;
+}
+
+.dirty-mark {
+  color: var(--danger);
+  flex: 0 0 auto;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .file-label {
   color: var(--text);
   opacity: 0.75;
@@ -158,11 +173,13 @@ body {
   max-width: 60%;
 }
 
-.tree-header {
+.tree-header,
+.editor-header {
   gap: 10px;
 }
 
-.tree-search {
+.tree-search,
+.editor-search {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -171,7 +188,8 @@ body {
   min-width: 0;
 }
 
-.tree-search input {
+.tree-search input,
+.editor-search input {
   flex: 1;
   max-width: 220px;
   min-width: 100px;
@@ -184,11 +202,13 @@ body {
   outline: none;
 }
 
-.tree-search input:focus {
+.tree-search input:focus,
+.editor-search input:focus {
   border-color: var(--accent);
 }
 
-.tree-search button {
+.tree-search button,
+.editor-search button {
   border: 1px solid var(--border);
   background: #2d2d2d;
   color: var(--text);
@@ -197,6 +217,16 @@ body {
   height: 24px;
   padding: 0;
   cursor: pointer;
+}
+
+.editor-header .file-meta {
+  max-width: 40%;
+  flex: 0 1 auto;
+}
+
+.editor-search input {
+  max-width: 160px;
+  min-width: 80px;
 }
 
 .search-count {
@@ -235,12 +265,9 @@ body {
 .tree-empty,
 .tree-error {
   padding: 16px;
-  color: var(--muted);
-}
-
-.tree-error {
   color: var(--danger);
   white-space: pre-wrap;
+  line-height: 1.5;
 }
 
 .tree-node {

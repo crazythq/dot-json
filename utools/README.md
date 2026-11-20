@@ -15,10 +15,14 @@ utools/
 ├── state/
 │   └── document.js    # 单文档状态（文本 / 路径 / 脏标记 / 缩进）
 ├── lib/
-│   └── json-core.js   # 格式化 / 压缩 / 修复 / 树模型（对照 DotJSONCore）
+│   ├── json-core.js       # 格式化 / 压缩 / 修复 / 树模型 / 错误行号
+│   ├── python-literal.js  # JSON ↔ Python literal
+│   └── tree-edit.js       # 树删节点、子孙 id 收集
 ├── tests/
-│   ├── run-json-core.js   # lib 契约测试
-│   └── run-document.js    # state 契约测试
+│   ├── run-json-core.js       # json-core 契约测试
+│   ├── run-document.js        # document 契约测试
+│   ├── run-python-literal.js  # Python 转换契约测试
+│   └── run-tree-edit.js       # 树编辑契约测试
 ├── logo.png           # 插件图标（256×256）
 ├── icon.png           # 1024 源图标
 └── README.md
@@ -52,9 +56,22 @@ utools/
 | 右键菜单 | Copy Key / Value / JSON Path | CM-01 ~ CM-03 |
 | 指令 | `json` / `dotjson`；选中文本 over；`.json` 文件匹配（**单文件**，`files.maxLength: 1`） | — |
 
+## 功能清单（P1）
+
+| 功能 | 说明 |
+|------|------|
+| 保存 / 另存为 | 工具栏文字按钮；已关联路径时保存写入该路径 |
+| 脏标记 | 标题栏或状态区提示未保存；保存成功后清除 |
+| ⌘S | 焦点在编辑器时快捷保存（uTools / Electron 环境） |
+| 转 Python / 转 JSON | 工具栏；Python 侧经 repair 再 format 为标准 JSON |
+| 树 Expand All / Collapse All | 右键或工具区批量展开 / 收起 |
+| 树 Delete | 删除选中节点并回写正文；**根节点不可删** |
+| 编辑器查找 | 简易查找条：下一项 / 上一项 |
+| 解析错误行号 | 能从引擎 message 提取位置时显示行号；否则仅原文（降级） |
+
 ## 未移植 / 后续阶段
 
-P0 刻意不包含多标签、保存/脏状态、Python↔JSON、树批量展开/删除、Diff、JSONL、设置页等。完整能力矩阵与分阶段计划见：
+P1 仍不包含多标签、Diff、JSONL、设置页、拖放等。完整能力矩阵与分阶段计划见：
 
 [docs/superpowers/specs/2026-11-19-utools-feature-parity-design.md](../docs/superpowers/specs/2026-11-19-utools-feature-parity-design.md)
 
@@ -66,11 +83,10 @@ P0 刻意不包含多标签、保存/脏状态、Python↔JSON、树批量展开
 
 ```bash
 cd utools
-node tests/run-json-core.js
-node tests/run-document.js
+for f in tests/run-*.js; do node "$f" || exit 1; done
 ```
 
-两脚本均应退出码 `0`，且不依赖 DOM / `utools`。
+或逐个运行：`run-document.js`、`run-json-core.js`、`run-python-literal.js`、`run-tree-edit.js`。均应退出码 `0`，且不依赖 DOM / `utools`。
 
 ## P0 手工验收（uTools 开发者模式）
 
@@ -80,6 +96,18 @@ node tests/run-document.js
 4. 选中文本 →「用 DotJSON 打开」仍可用。
 5. 选中 `.json` 文件匹配仍可用（单文件）。
 6. 工具栏为文字按钮，无 macOS 图标栏。
+
+## P1 验收清单
+
+在 uTools 开发者模式中逐项确认（Node 项见下节）：
+
+1. **保存 / 另存为 / ⌘S** — 有路径时保存写盘；另存为可选新路径；⌘S 触发保存。
+2. **脏标记** — 编辑正文后出现未保存提示；保存成功后清除。
+3. **转 Python / 转 JSON** — 合法 JSON 与可修复 Python 文本往返正确。
+4. **树 Expand All / Collapse All / Delete** — 批量展开收起可用；Delete 更新正文；根节点不可删。
+5. **编辑器查找** — 查找条上一项 / 下一项跳转正确。
+6. **非法 JSON 错误** — 解析失败时，能提取行号则展示行号，否则显示原始错误（降级）。
+7. **契约测试** — `node tests/run-*.js` 全部通过（见上节命令）。
 
 ## 本地 UI 预览（可选）
 

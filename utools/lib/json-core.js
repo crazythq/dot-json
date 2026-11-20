@@ -28,6 +28,31 @@
     }
   }
 
+  /**
+   * 从 JSON.parse 异常 message 提取 V8 `position`，换算为 1-based 行号。
+   * 无法提取时返回 null。
+   */
+  function parseErrorLine(text) {
+    const source = String(text ?? "").replace(/^\uFEFF/, "");
+    if (!source.trim()) return null;
+    try {
+      JSON.parse(source);
+      return null;
+    } catch (err) {
+      const message = err && err.message ? String(err.message) : String(err);
+      const match = message.match(/position\s+(\d+)/i);
+      if (!match) return null;
+      const position = Number(match[1]);
+      if (!Number.isFinite(position) || position < 0) return null;
+      const offset = Math.min(position, source.length);
+      let line = 1;
+      for (let i = 0; i < offset; i += 1) {
+        if (source[i] === "\n") line += 1;
+      }
+      return line;
+    }
+  }
+
   function encodeLeaf(value) {
     return JSON.stringify(value);
   }
@@ -376,6 +401,7 @@
   global.DotJSONCore = {
     INDENTS,
     tryParse,
+    parseErrorLine,
     format,
     minify,
     repair,
