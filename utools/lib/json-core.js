@@ -71,47 +71,115 @@
     return JSON.stringify(parsed.value);
   }
 
-  function stripMarkdownFence(input) {
-    const match = input.match(/```(?:json|python|js|javascript)?\s*\n([\s\S]*?)```/i);
-    if (match) return match[1];
-    return input;
+  /** 解析完整三反引号围栏；仅接受空 / json / python 标签。 */
+  function extractFencedCandidates(input) {
+    const result = [];
+    let cursor = 0;
+    while (cursor < input.length) {
+      const opening = input.indexOf("```", cursor);
+      if (opening === -1) break;
+      const headerStart = opening + 3;
+      const headerEnd = input.indexOf("\n", headerStart);
+      if (headerEnd === -1) {
+        throw new Error("Incomplete Markdown code fence.");
+      }
+      const closing = input.indexOf("```", headerEnd + 1);
+      if (closing === -1) {
+        throw new Error("Incomplete Markdown code fence.");
+      }
+      const label = input.slice(headerStart, headerEnd).trim().toLowerCase();
+      if (label && label !== "json" && label !== "python") {
+        throw new Error("Unsupported Markdown code fence language.");
+      }
+      result.push(input.slice(headerEnd + 1, closing));
+      cursor = closing + 3;
+    }
+    return result;
   }
 
-  function extractBalancedRoot(input) {
-    const text = input.trim();
-    const startChar = text[0];
-    if (startChar !== "{" && startChar !== "[") return null;
-    const endChar = startChar === "{" ? "}" : "]";
-    let depth = 0;
-    let inString = false;
+  /** 字符串感知地扫描顶层完整对象/数组候选。 */
+  function extractBalancedCandidates(input) {
+    const result = [];
+    const stack = [];
+    let rootStart = -1;
     let quote = null;
     let escaped = false;
 
-    for (let i = 0; i < text.length; i += 1) {
-      const ch = text[i];
-      if (inString) {
+    for (let i = 0; i < input.length; i += 1) {
+      const ch = input[i];
+
+      if (rootStart !== -1 && quote !== null) {
         if (escaped) {
           escaped = false;
         } else if (ch === "\\") {
           escaped = true;
         } else if (ch === quote) {
-          inString = false;
           quote = null;
         }
         continue;
       }
-      if (ch === '"' || ch === "'") {
-        inString = true;
+
+      if (rootStart !== -1 && (ch === '"' || ch === "'")) {
         quote = ch;
         continue;
       }
-      if (ch === startChar) depth += 1;
-      if (ch === endChar) {
-        depth -= 1;
-        if (depth === 0) return text.slice(0, i + 1);
+
+      if (ch === "{" || ch === "[") {
+        if (rootStart === -1) rootStart = i;
+        stack.push(ch);
+        continue;
+      }
+
+      if ((ch === "}" || ch === "]") && rootStart !== -1) {
+        const opening = stack[stack.length - 1];
+        if (
+          !opening ||
+          !(
+            (opening === "{" && ch === "}") ||
+            (opening === "[" && ch === "]")
+          )
+        ) {
+          throw new Error("Mismatched closing bracket.");
+        }
+        stack.pop();
+        if (stack.length === 0) {
+          result.push(input.slice(rootStart, i + 1));
+          rootStart = -1;
+        }
       }
     }
-    return null;
+
+    if (rootStart !== -1) {
+      throw new Error("Incomplete JSON object or array.");
+    }
+    return result;
+  }
+
+  /**
+   * 抽取唯一候选（对齐 mac JSONCandidateExtractor）。
+   * 根外仅有空白时保留整段文本，避免吞掉结尾换行。
+   */
+  function extractUnique(input) {
+    if (input.includes("```")) {
+      const fenced = extractFencedCandidates(input);
+      if (fenced.length !== 1) {
+        throw new Error("Multiple JSON candidates found.");
+      }
+      return fenced[0];
+    }
+
+    const balanced = extractBalancedCandidates(input);
+    if (balanced.length !== 1) {
+      throw new Error(
+        balanced.length === 0
+          ? "No complete JSON object or array found."
+          : "Multiple JSON candidates found."
+      );
+    }
+    if (input.trim() === balanced[0]) {
+      return input;
+    }
+    return balanced[0];
   }
 
   /** 保守修复：Markdown 围栏、True/False/None、尾逗号、单引号键/值（确定性子集）。 */
@@ -119,12 +187,7 @@
     const original = String(input ?? "").replace(/^\uFEFF/, "");
     if (tryParse(original).ok) return original;
 
-    let candidate = stripMarkdownFence(original);
-    if (!tryParse(candidate).ok) {
-      const balanced = extractBalancedRoot(candidate);
-      if (balanced) candidate = balanced;
-    }
-
+    const candidate = extractUnique(original);
     if (tryParse(candidate).ok) return candidate;
 
     let out = "";

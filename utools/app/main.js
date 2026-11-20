@@ -2,7 +2,10 @@
   "use strict";
 
   const core = window.DotJSONCore;
-  const api = window.dotjson;
+  const Doc = window.DotJSONDocument;
+  const services = window.services;
+
+  const doc = Doc.create();
 
   const els = {
     editor: document.getElementById("editor"),
@@ -18,8 +21,6 @@
   };
 
   const state = {
-    filePath: null,
-    fileName: "",
     root: null,
     expanded: new Set(["0"]),
     selectedId: null,
@@ -30,6 +31,8 @@
     parseTimer: null,
   };
 
+  Doc.setIndent(doc, els.indent.value);
+
   function setStatus(message, kind) {
     els.status.textContent = message;
     els.status.classList.remove("is-error", "is-ok");
@@ -37,36 +40,46 @@
     if (kind === "ok") els.status.classList.add("is-ok");
   }
 
+  function syncFileLabel() {
+    els.fileLabel.textContent = doc.fileName || "";
+  }
+
   function copyText(text) {
     if (window.utools && typeof utools.copyText === "function") {
       utools.copyText(String(text ?? ""));
       return;
     }
-    if (api && typeof api.writeClipboard === "function") {
-      api.writeClipboard(text);
+    if (services && typeof services.writeClipboard === "function") {
+      services.writeClipboard(text);
       return;
     }
     navigator.clipboard.writeText(String(text ?? ""));
   }
 
   function readClipboard() {
-    if (api && typeof api.readClipboard === "function") {
-      return api.readClipboard();
+    if (services && typeof services.readClipboard === "function") {
+      return services.readClipboard();
     }
     return "";
   }
 
   function setEditorText(text, opts) {
     const options = opts || {};
-    els.editor.value = text == null ? "" : String(text);
+    const value = text == null ? "" : String(text);
+    els.editor.value = value;
+    Doc.setText(doc, value, { markDirty: false });
     if (options.filePath) {
-      state.filePath = options.filePath;
-      state.fileName = options.fileName || options.filePath.split(/[/\\]/).pop();
-      els.fileLabel.textContent = state.fileName;
+      Doc.setFile(doc, {
+        filePath: options.filePath,
+        fileName: options.fileName || options.filePath.split(/[/\\]/).pop(),
+      });
+      syncFileLabel();
     } else if (options.clearFile) {
-      state.filePath = null;
-      state.fileName = "";
-      els.fileLabel.textContent = "";
+      Doc.clearFile(doc);
+      syncFileLabel();
+    }
+    if (options.filePath || options.clearFile) {
+      Doc.markSaved(doc);
     }
     scheduleParse(options.immediate);
   }
@@ -309,7 +322,10 @@
   }
 
   // —— events ——
-  els.editor.addEventListener("input", () => scheduleParse(false));
+  els.editor.addEventListener("input", () => {
+    Doc.setText(doc, els.editor.value, { markDirty: true });
+    scheduleParse(false);
+  });
 
   els.editor.addEventListener("keydown", (event) => {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
@@ -336,7 +352,7 @@
   });
 
   function openJsonViaDialog() {
-    if (!window.utools || typeof utools.showOpenDialog !== "function" || !api) {
+    if (!window.utools || typeof utools.showOpenDialog !== "function" || !services) {
       setStatus("当前环境不支持打开文件", "error");
       return;
     }
@@ -351,7 +367,7 @@
       });
       if (!paths || !paths.length) return;
       const filePath = paths[0];
-      const content = api.readTextFile(filePath);
+      const content = services.readTextFile(filePath);
       const fileName = filePath.split(/[/\\]/).pop();
       setEditorText(content, {
         filePath,
@@ -374,7 +390,7 @@
   }
 
   function exportJsonViaDialog() {
-    if (!window.utools || typeof utools.showSaveDialog !== "function" || !api) {
+    if (!window.utools || typeof utools.showSaveDialog !== "function" || !services) {
       copyText(els.editor.value);
       setStatus("已复制（无保存对话框时回退为复制）", "ok");
       return;
@@ -382,18 +398,21 @@
     try {
       const saved = utools.showSaveDialog({
         title: "导出 JSON",
-        defaultPath: state.fileName || "untitled.json",
+        defaultPath: doc.fileName || "untitled.json",
         filters: [
           { name: "JSON", extensions: ["json"] },
           { name: "All Files", extensions: ["*"] },
         ],
       });
       if (!saved) return;
-      api.writeTextFile(saved, els.editor.value);
-      state.filePath = saved;
-      state.fileName = saved.split(/[/\\]/).pop();
-      els.fileLabel.textContent = state.fileName;
-      setStatus(`已导出 ${state.fileName}`, "ok");
+      services.writeTextFile(saved, els.editor.value);
+      Doc.setFile(doc, {
+        filePath: saved,
+        fileName: saved.split(/[/\\]/).pop(),
+      });
+      Doc.markSaved(doc);
+      syncFileLabel();
+      setStatus(`已导出 ${doc.fileName}`, "ok");
     } catch (err) {
       setStatus(`导出失败: ${err.message || err}`, "error");
     }
@@ -403,6 +422,7 @@
   document.getElementById("btn-export").addEventListener("click", exportJsonViaDialog);
 
   els.indent.addEventListener("change", () => {
+    Doc.setIndent(doc, els.indent.value);
     if (!els.editor.value.trim()) return;
     formatEditor();
   });
@@ -511,7 +531,7 @@
     if (code === "dotjson-file" && type === "files" && Array.isArray(payload) && payload[0]) {
       const file = payload[0];
       try {
-        const content = api.readTextFile(file.path);
+        const content = services.readTextFile(file.path);
         setEditorText(content, {
           filePath: file.path,
           fileName: file.name,
