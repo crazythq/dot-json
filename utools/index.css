@@ -104,6 +104,70 @@ body {
   color: #89d185;
 }
 
+.tab-bar {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  min-height: 32px;
+  background: #181818;
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+
+.tab-list {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.tab-item {
+  appearance: none;
+  border: 0;
+  border-right: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  padding: 6px 12px;
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 0 0 auto;
+}
+
+.tab-item:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.tab-item.is-active {
+  background: var(--bg);
+  color: var(--text);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.tab-new {
+  appearance: none;
+  border: 0;
+  border-left: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  width: 32px;
+  flex: 0 0 32px;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tab-new:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
 .panes {
   display: flex;
   flex: 1;
@@ -355,4 +419,29 @@ body {
 
 .context-menu li:hover {
   background: var(--accent);
+}
+
+.recent-menu {
+  min-width: 220px;
+  max-width: min(480px, calc(100vw - 16px));
+  max-height: min(360px, calc(100vh - 48px));
+  overflow: auto;
+}
+
+.recent-menu li {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.recent-menu li.is-empty {
+  color: var(--muted);
+  cursor: default;
+  font-family: var(--font-ui);
+}
+
+.recent-menu li.is-empty:hover {
+  background: transparent;
 }

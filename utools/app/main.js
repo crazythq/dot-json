@@ -3,11 +3,15 @@
 
   const core = window.DotJSONCore;
   const Doc = window.DotJSONDocument;
+  const WS = window.DotJSONWorkspace;
   const py = window.DotJSONPython;
   const treeEdit = window.DotJSONTreeEdit;
   const services = window.services;
 
-  const doc = Doc.create();
+  let ws = WS.create();
+  WS.ensureTab(ws);
+  let sessionWriteTimer = null;
+  const RECENT_KEY = "dotjson.recentFiles";
 
   const els = {
     editor: document.getElementById("editor"),
@@ -20,6 +24,10 @@
     editorSearch: document.getElementById("editor-search"),
     editorSearchCount: document.getElementById("editor-search-count"),
     menu: document.getElementById("context-menu"),
+    tabMenu: document.getElementById("tab-context-menu"),
+    recentMenu: document.getElementById("recent-menu"),
+    btnRecent: document.getElementById("btn-recent"),
+    tabList: document.getElementById("tab-list"),
     splitter: document.getElementById("splitter"),
     editorPane: document.querySelector(".pane-editor"),
   };
@@ -29,6 +37,7 @@
     expanded: new Set(["0"]),
     selectedId: null,
     contextNodeId: null,
+    tabMenuIndex: -1,
     matches: [],
     matchIndex: -1,
     editorMatches: [],
@@ -39,7 +48,305 @@
     lastParseOk: true,
   };
 
-  Doc.setIndent(doc, els.indent.value);
+  function activeDoc() {
+    return WS.activeDoc(ws);
+  }
+
+  function tabDisplayName(doc, index) {
+    if (doc.title) return doc.title;
+    if (doc.fileName) return doc.fileName;
+    return "Untitled " + (index + 1);
+  }
+
+  function flushEditorToActiveDoc() {
+    const doc = activeDoc();
+    if (!doc) return;
+    Doc.setText(doc, els.editor.value, {});
+    Doc.setIndent(doc, els.indent.value);
+  }
+
+  function persistSession() {
+    if (!services || typeof services.writeSession !== "function") return;
+    try {
+      flushEditorToActiveDoc();
+      services.writeSession(JSON.stringify(WS.toSnapshot(ws)));
+    } catch (err) {
+      /* 无 utools / 写失败时不抛 */
+    }
+  }
+
+  function schedulePersistSession() {
+    if (!services || typeof services.writeSession !== "function") return;
+    if (sessionWriteTimer) clearTimeout(sessionWriteTimer);
+    sessionWriteTimer = setTimeout(() => {
+      sessionWriteTimer = null;
+      persistSession();
+    }, 300);
+  }
+
+  function loadRecentFromDb() {
+    if (!window.utools || !utools.dbStorage || typeof utools.dbStorage.getItem !== "function") {
+      return;
+    }
+    try {
+      const stored = utools.dbStorage.getItem(RECENT_KEY);
+      if (!Array.isArray(stored)) return;
+      ws.recentFiles = stored
+        .filter(function (p) {
+          return typeof p === "string" && p;
+        })
+        .slice(0, WS.MAX_RECENT);
+    } catch (err) {
+      /* 无 utools / 读失败时不抛 */
+    }
+  }
+
+  function persistRecent() {
+    if (!window.utools || !utools.dbStorage || typeof utools.dbStorage.setItem !== "function") {
+      return;
+    }
+    try {
+      utools.dbStorage.setItem(RECENT_KEY, ws.recentFiles.slice());
+    } catch (err) {
+      /* 无 utools / 写失败时不抛 */
+    }
+  }
+
+  function rememberRecent(filePath) {
+    if (!filePath) return;
+    WS.addRecent(ws, filePath);
+    persistRecent();
+  }
+
+  function removeRecent(filePath) {
+    if (!filePath) return;
+    const path = String(filePath);
+    ws.recentFiles = ws.recentFiles.filter(function (p) {
+      return p !== path;
+    });
+    persistRecent();
+  }
+
+  function hideRecentMenu() {
+    if (els.recentMenu) els.recentMenu.hidden = true;
+  }
+
+  function showRecentMenu() {
+    if (!els.recentMenu || !els.btnRecent) return;
+    els.recentMenu.innerHTML = "";
+    if (!ws.recentFiles.length) {
+      const empty = document.createElement("li");
+      empty.className = "is-empty";
+      empty.textContent = "暂无最近文件";
+      els.recentMenu.appendChild(empty);
+    } else {
+      ws.recentFiles.forEach(function (filePath) {
+        const item = document.createElement("li");
+        item.dataset.path = filePath;
+        item.textContent = filePath;
+        item.title = filePath;
+        els.recentMenu.appendChild(item);
+      });
+    }
+    els.recentMenu.hidden = false;
+    const btnRect = els.btnRecent.getBoundingClientRect();
+    const menuRect = els.recentMenu.getBoundingClientRect();
+    const maxX = window.innerWidth - menuRect.width - 4;
+    const maxY = window.innerHeight - menuRect.height - 4;
+    els.recentMenu.style.left = `${Math.max(0, Math.min(btnRect.left, maxX))}px`;
+    els.recentMenu.style.top = `${Math.max(0, Math.min(btnRect.bottom + 2, maxY))}px`;
+  }
+
+  function openRecentPath(filePath) {
+    if (!filePath) return;
+    if (!services || typeof services.readTextFile !== "function") {
+      setStatus("当前环境不支持打开文件", "error");
+      return;
+    }
+    try {
+      const content = services.readTextFile(filePath);
+      const fileName = filePath.split(/[/\\]/).pop();
+      flushEditorToActiveDoc();
+      let rawText = content;
+      try {
+        rawText = core.format(content, els.indent.value);
+      } catch (err) {
+        rawText = content;
+      }
+      const result = WS.openPath(ws, {
+        filePath,
+        fileName,
+        rawText,
+        indentKey: els.indent.value,
+      });
+      if (!result.ok) {
+        setStatus(result.error === "max tabs" ? "标签已达上限（20）" : "打开失败", "error");
+        return;
+      }
+      bindActiveDocToEditor();
+      rememberRecent(filePath);
+      schedulePersistSession();
+      setStatus(`已打开 ${fileName}`, "ok");
+    } catch (err) {
+      removeRecent(filePath);
+      setStatus(`打开失败: ${err.message || err}`, "error");
+    }
+  }
+
+  function restoreSession() {
+    let raw = null;
+    if (services && typeof services.readSession === "function") {
+      try {
+        raw = services.readSession();
+      } catch (err) {
+        raw = null;
+      }
+    }
+    if (raw) {
+      try {
+        ws = WS.fromSnapshot(JSON.parse(raw));
+      } catch (err) {
+        WS.ensureTab(ws);
+      }
+    } else {
+      WS.ensureTab(ws);
+    }
+    loadRecentFromDb();
+    bindActiveDocToEditor();
+  }
+
+  function bindActiveDocToEditor() {
+    const doc = activeDoc();
+    if (!doc) return;
+    els.editor.value = doc.rawText == null ? "" : String(doc.rawText);
+    els.indent.value = doc.indentKey || "fourSpaces";
+    state.expanded = new Set(["0"]);
+    state.selectedId = null;
+    state.matches = [];
+    state.matchIndex = -1;
+    state.editorMatches = [];
+    state.editorMatchIndex = -1;
+    syncFileLabel();
+    updateDirtyMark();
+    if (els.editorSearch.value) applyEditorSearch(els.editorSearch.value, { silent: true });
+    else updateEditorSearchCount();
+    refreshTree();
+    renderTabs();
+  }
+
+  function renderTabs() {
+    if (!els.tabList) return;
+    els.tabList.innerHTML = "";
+    ws.tabs.forEach((doc, index) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "tab-item" + (index === ws.activeIndex ? " is-active" : "");
+      btn.setAttribute("role", "tab");
+      btn.setAttribute("aria-selected", index === ws.activeIndex ? "true" : "false");
+      btn.dataset.index = String(index);
+      const label = tabDisplayName(doc, index);
+      btn.textContent = doc.isDirty ? "• " + label : label;
+      btn.title = label;
+      btn.addEventListener("click", () => switchToTab(index));
+      btn.addEventListener("dblclick", (event) => {
+        event.preventDefault();
+        renameTabAt(index);
+      });
+      btn.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        showTabMenu(event.clientX, event.clientY, index);
+      });
+      els.tabList.appendChild(btn);
+    });
+  }
+
+  function switchToTab(index) {
+    if (index < 0 || index >= ws.tabs.length) return;
+    if (index === ws.activeIndex) {
+      renderTabs();
+      return;
+    }
+    flushEditorToActiveDoc();
+    WS.activate(ws, index);
+    bindActiveDocToEditor();
+    schedulePersistSession();
+  }
+
+  function createNewTab() {
+    flushEditorToActiveDoc();
+    const result = WS.newTab(ws);
+    if (!result.ok) {
+      setStatus("标签已达上限（20）", "error");
+      return;
+    }
+    bindActiveDocToEditor();
+    schedulePersistSession();
+    setStatus("已新建标签", "ok");
+  }
+
+  function renameTabAt(index) {
+    if (index < 0 || index >= ws.tabs.length) return;
+    const doc = ws.tabs[index];
+    const current = tabDisplayName(doc, index);
+    const next = window.prompt("重命名标签", current);
+    if (next == null) return;
+    const trimmed = String(next).trim();
+    if (!trimmed) return;
+    WS.renameTab(ws, index, trimmed);
+    renderTabs();
+    if (index === ws.activeIndex) syncFileLabel();
+    schedulePersistSession();
+  }
+
+  function closeTabAt(index) {
+    if (index < 0 || index >= ws.tabs.length) return;
+    flushEditorToActiveDoc();
+    WS.closeTab(ws, index);
+    bindActiveDocToEditor();
+    schedulePersistSession();
+  }
+
+  function duplicateTabAt(index) {
+    if (index < 0 || index >= ws.tabs.length) return;
+    flushEditorToActiveDoc();
+    const result = WS.duplicateTab(ws, index);
+    if (!result.ok) {
+      setStatus(result.error === "max tabs" ? "标签已达上限（20）" : "复制失败", "error");
+      return;
+    }
+    bindActiveDocToEditor();
+    schedulePersistSession();
+    setStatus("已复制标签", "ok");
+  }
+
+  function closeOtherTabs(keepIndex) {
+    if (keepIndex < 0 || keepIndex >= ws.tabs.length) return;
+    flushEditorToActiveDoc();
+    const keep = ws.tabs[keepIndex];
+    ws.tabs = [keep];
+    ws.activeIndex = 0;
+    bindActiveDocToEditor();
+    schedulePersistSession();
+    setStatus("已关闭其他标签", "ok");
+  }
+
+  function hideTabMenu() {
+    if (els.tabMenu) els.tabMenu.hidden = true;
+    state.tabMenuIndex = -1;
+  }
+
+  function showTabMenu(x, y, index) {
+    if (!els.tabMenu) return;
+    state.tabMenuIndex = index;
+    els.tabMenu.hidden = false;
+    const rect = els.tabMenu.getBoundingClientRect();
+    const maxX = window.innerWidth - rect.width - 4;
+    const maxY = window.innerHeight - rect.height - 4;
+    els.tabMenu.style.left = `${Math.max(0, Math.min(x, maxX))}px`;
+    els.tabMenu.style.top = `${Math.max(0, Math.min(y, maxY))}px`;
+  }
+
+  Doc.setIndent(activeDoc(), els.indent.value);
 
   function setStatus(message, kind) {
     els.status.textContent = message;
@@ -49,15 +356,20 @@
   }
 
   function syncFileLabel() {
-    els.fileLabel.textContent = doc.fileName || "";
+    const doc = activeDoc();
+    els.fileLabel.textContent = doc && doc.fileName ? doc.fileName : "";
   }
 
   function updateDirtyMark() {
+    const doc = activeDoc();
     const mark = document.getElementById("dirty-mark");
-    if (mark) mark.hidden = !doc.isDirty;
+    if (mark) mark.hidden = !(doc && doc.isDirty);
+    renderTabs();
   }
 
   function markProgrammaticDirty() {
+    const doc = activeDoc();
+    if (!doc) return;
     Doc.markDirty(doc);
     updateDirtyMark();
   }
@@ -84,19 +396,20 @@
   function setEditorText(text, opts) {
     const options = opts || {};
     const value = text == null ? "" : String(text);
+    const doc = activeDoc();
     els.editor.value = value;
-    Doc.setText(doc, value, { markDirty: false });
-    if (options.filePath) {
+    if (doc) Doc.setText(doc, value, { markDirty: false });
+    if (options.filePath && doc) {
       Doc.setFile(doc, {
         filePath: options.filePath,
         fileName: options.fileName || options.filePath.split(/[/\\]/).pop(),
       });
       syncFileLabel();
-    } else if (options.clearFile) {
+    } else if (options.clearFile && doc) {
       Doc.clearFile(doc);
       syncFileLabel();
     }
-    if (options.filePath || options.clearFile) {
+    if ((options.filePath || options.clearFile) && doc) {
       Doc.markSaved(doc);
     }
     updateDirtyMark();
@@ -416,7 +729,8 @@
 
   function toPythonEditor() {
     try {
-      const text = py.toPython(els.editor.value, doc.indentKey);
+      const doc = activeDoc();
+      const text = py.toPython(els.editor.value, doc ? doc.indentKey : els.indent.value);
       setEditorText(text, { immediate: true });
       markProgrammaticDirty();
       setStatus("已转为 Python", "ok");
@@ -427,7 +741,8 @@
 
   function toJSONEditor() {
     try {
-      const text = py.toJSON(els.editor.value, doc.indentKey);
+      const doc = activeDoc();
+      const text = py.toJSON(els.editor.value, doc ? doc.indentKey : els.indent.value);
       setEditorText(text, { immediate: true });
       markProgrammaticDirty();
       setStatus("已转为 JSON", "ok");
@@ -480,7 +795,8 @@
 
   // —— events ——
   els.editor.addEventListener("input", () => {
-    Doc.setText(doc, els.editor.value, { markDirty: true });
+    const doc = activeDoc();
+    if (doc) Doc.setText(doc, els.editor.value, { markDirty: true });
     updateDirtyMark();
     scheduleParse(false);
     if (els.editorSearch.value) applyEditorSearch(els.editorSearch.value, { silent: true });
@@ -533,6 +849,89 @@
     setStatus("已复制全文", "ok");
   });
 
+  document.getElementById("btn-new-tab").addEventListener("click", createNewTab);
+
+  if (els.tabMenu) {
+    els.tabMenu.addEventListener("click", (event) => {
+      const item = event.target.closest("li[data-action]");
+      if (!item) return;
+      const index = state.tabMenuIndex;
+      const action = item.dataset.action;
+      hideTabMenu();
+      if (index < 0) return;
+      if (action === "duplicate") duplicateTabAt(index);
+      else if (action === "close") closeTabAt(index);
+      else if (action === "close-others") closeOtherTabs(index);
+    });
+  }
+
+  function isJsonFileName(name) {
+    if (!name) return false;
+    const lower = String(name).toLowerCase();
+    return lower.endsWith(".json");
+  }
+
+  function openFileIntoWorkspace(filePath, fileName) {
+    const content = services.readTextFile(filePath);
+    let rawText = content;
+    try {
+      rawText = core.format(content, els.indent.value);
+    } catch (err) {
+      rawText = content;
+    }
+    const result = WS.openPath(ws, {
+      filePath,
+      fileName: fileName || filePath.split(/[/\\]/).pop(),
+      rawText,
+      indentKey: els.indent.value,
+    });
+    if (!result.ok) return result;
+    rememberRecent(filePath);
+    return result;
+  }
+
+  function openManyPaths(paths) {
+    if (!paths || !paths.length) return;
+    flushEditorToActiveDoc();
+    let opened = 0;
+    let truncated = false;
+    let lastName = "";
+    for (let i = 0; i < paths.length; i += 1) {
+      const filePath = paths[i];
+      if (!filePath) continue;
+      const fileName = filePath.split(/[/\\]/).pop();
+      try {
+        const result = openFileIntoWorkspace(filePath, fileName);
+        if (!result.ok) {
+          if (result.error === "max tabs") {
+            truncated = true;
+            break;
+          }
+          setStatus("打开失败", "error");
+          continue;
+        }
+        opened += 1;
+        lastName = fileName;
+      } catch (err) {
+        setStatus(`打开失败: ${err.message || err}`, "error");
+      }
+    }
+    bindActiveDocToEditor();
+    schedulePersistSession();
+    if (truncated) {
+      setStatus(
+        opened
+          ? `已打开 ${opened} 个文件，其余因标签上限（20）未打开`
+          : "标签已达上限（20）",
+        "error"
+      );
+    } else if (opened === 1) {
+      setStatus(`已打开 ${lastName}`, "ok");
+    } else if (opened > 1) {
+      setStatus(`已打开 ${opened} 个文件`, "ok");
+    }
+  }
+
   function openJsonViaDialog() {
     if (!window.utools || typeof utools.showOpenDialog !== "function" || !services) {
       setStatus("当前环境不支持打开文件", "error");
@@ -541,37 +940,21 @@
     try {
       const paths = utools.showOpenDialog({
         title: "打开 JSON 文件",
-        properties: ["openFile"],
+        properties: ["openFile", "multiSelections"],
         filters: [
           { name: "JSON", extensions: ["json"] },
           { name: "All Files", extensions: ["*"] },
         ],
       });
       if (!paths || !paths.length) return;
-      const filePath = paths[0];
-      const content = services.readTextFile(filePath);
-      const fileName = filePath.split(/[/\\]/).pop();
-      setEditorText(content, {
-        filePath,
-        fileName,
-        immediate: true,
-      });
-      try {
-        setEditorText(core.format(content, els.indent.value), {
-          filePath,
-          fileName,
-          immediate: true,
-        });
-      } catch (err) {
-        // 保持原内容
-      }
-      setStatus(`已打开 ${fileName}`, "ok");
+      openManyPaths(paths);
     } catch (err) {
       setStatus(`打开失败: ${err.message || err}`, "error");
     }
   }
 
   function saveDocumentAs() {
+    const doc = activeDoc();
     if (!window.utools || typeof utools.showSaveDialog !== "function" || !services) {
       setStatus("当前环境不支持另存为", "error");
       return;
@@ -579,7 +962,7 @@
     try {
       const saved = utools.showSaveDialog({
         title: "另存为",
-        defaultPath: doc.fileName || "untitled.json",
+        defaultPath: (doc && doc.fileName) || "untitled.json",
         filters: [
           { name: "JSON", extensions: ["json"] },
           { name: "All Files", extensions: ["*"] },
@@ -587,22 +970,26 @@
       });
       if (!saved) return;
       services.writeTextFile(saved, els.editor.value);
-      Doc.setText(doc, els.editor.value, { markDirty: false });
-      Doc.setFile(doc, {
-        filePath: saved,
-        fileName: saved.split(/[/\\]/).pop(),
-      });
-      Doc.markSaved(doc);
+      if (doc) {
+        Doc.setText(doc, els.editor.value, { markDirty: false });
+        Doc.setFile(doc, {
+          filePath: saved,
+          fileName: saved.split(/[/\\]/).pop(),
+        });
+        Doc.markSaved(doc);
+      }
+      rememberRecent(saved);
       syncFileLabel();
       updateDirtyMark();
-      setStatus(`已另存为 ${doc.fileName}`, "ok");
+      setStatus(`已另存为 ${doc ? doc.fileName : ""}`, "ok");
     } catch (err) {
       setStatus(`另存为失败: ${err.message || err}`, "error");
     }
   }
 
   function saveDocument() {
-    if (!doc.filePath) return saveDocumentAs();
+    const doc = activeDoc();
+    if (!doc || !doc.filePath) return saveDocumentAs();
     if (!services || typeof services.writeTextFile !== "function") {
       setStatus("当前环境不支持保存", "error");
       return;
@@ -611,6 +998,7 @@
       services.writeTextFile(doc.filePath, els.editor.value);
       Doc.setText(doc, els.editor.value, { markDirty: false });
       Doc.markSaved(doc);
+      rememberRecent(doc.filePath);
       updateDirtyMark();
       setStatus(`已保存 ${doc.fileName}`, "ok");
     } catch (err) {
@@ -619,6 +1007,7 @@
   }
 
   function exportJsonViaDialog() {
+    const doc = activeDoc();
     if (!window.utools || typeof utools.showSaveDialog !== "function" || !services) {
       copyText(els.editor.value);
       setStatus("已复制（无保存对话框时回退为复制）", "ok");
@@ -627,7 +1016,7 @@
     try {
       const saved = utools.showSaveDialog({
         title: "导出 JSON",
-        defaultPath: doc.fileName || "untitled.json",
+        defaultPath: (doc && doc.fileName) || "untitled.json",
         filters: [
           { name: "JSON", extensions: ["json"] },
           { name: "All Files", extensions: ["*"] },
@@ -635,26 +1024,45 @@
       });
       if (!saved) return;
       services.writeTextFile(saved, els.editor.value);
-      Doc.setFile(doc, {
-        filePath: saved,
-        fileName: saved.split(/[/\\]/).pop(),
-      });
-      Doc.markSaved(doc);
+      if (doc) {
+        Doc.setFile(doc, {
+          filePath: saved,
+          fileName: saved.split(/[/\\]/).pop(),
+        });
+        Doc.markSaved(doc);
+      }
       syncFileLabel();
       updateDirtyMark();
-      setStatus(`已导出 ${doc.fileName}`, "ok");
+      setStatus(`已导出 ${doc ? doc.fileName : ""}`, "ok");
     } catch (err) {
       setStatus(`导出失败: ${err.message || err}`, "error");
     }
   }
 
   document.getElementById("btn-open").addEventListener("click", openJsonViaDialog);
+  if (els.btnRecent) {
+    els.btnRecent.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (els.recentMenu && !els.recentMenu.hidden) hideRecentMenu();
+      else showRecentMenu();
+    });
+  }
+  if (els.recentMenu) {
+    els.recentMenu.addEventListener("click", (event) => {
+      const item = event.target.closest("li[data-path]");
+      if (!item) return;
+      const filePath = item.dataset.path;
+      hideRecentMenu();
+      openRecentPath(filePath);
+    });
+  }
   document.getElementById("btn-save").addEventListener("click", saveDocument);
   document.getElementById("btn-save-as").addEventListener("click", saveDocumentAs);
   document.getElementById("btn-export").addEventListener("click", exportJsonViaDialog);
 
   els.indent.addEventListener("change", () => {
-    Doc.setIndent(doc, els.indent.value);
+    const doc = activeDoc();
+    if (doc) Doc.setIndent(doc, els.indent.value);
     if (!els.editor.value.trim()) return;
     formatEditor();
   });
@@ -774,6 +1182,15 @@
 
   document.addEventListener("click", (event) => {
     if (!els.menu.hidden && !els.menu.contains(event.target)) hideMenu();
+    if (els.tabMenu && !els.tabMenu.hidden && !els.tabMenu.contains(event.target)) hideTabMenu();
+    if (
+      els.recentMenu &&
+      !els.recentMenu.hidden &&
+      !els.recentMenu.contains(event.target) &&
+      event.target !== els.btnRecent
+    ) {
+      hideRecentMenu();
+    }
   });
 
   // splitter
@@ -799,27 +1216,48 @@
     const type = action && action.type;
     const payload = action && action.payload;
 
-    if (code === "dotjson-file" && type === "files" && Array.isArray(payload) && payload[0]) {
-      const file = payload[0];
-      try {
-        const content = services.readTextFile(file.path);
-        setEditorText(content, {
-          filePath: file.path,
-          fileName: file.name,
-          immediate: true,
-        });
+    if (code === "dotjson-file" && type === "files" && Array.isArray(payload) && payload.length) {
+      if (!services || typeof services.readTextFile !== "function") {
+        setStatus("当前环境不支持打开文件", "error");
+        return;
+      }
+      flushEditorToActiveDoc();
+      let opened = 0;
+      let truncated = false;
+      let lastName = "";
+      for (let i = 0; i < payload.length; i += 1) {
+        const file = payload[i];
+        if (!file || file.isFile !== true) continue;
+        const name = file.name || (file.path && String(file.path).split(/[/\\]/).pop()) || "";
+        if (!isJsonFileName(name)) continue;
         try {
-          setEditorText(core.format(content, els.indent.value), {
-            filePath: file.path,
-            fileName: file.name,
-            immediate: true,
-          });
+          const result = openFileIntoWorkspace(file.path, name);
+          if (!result.ok) {
+            if (result.error === "max tabs") {
+              truncated = true;
+              break;
+            }
+            continue;
+          }
+          opened += 1;
+          lastName = name;
         } catch (err) {
-          // keep raw
+          setStatus(err.message || String(err), "error");
         }
-        setStatus(`已打开 ${file.name}`, "ok");
-      } catch (err) {
-        setStatus(err.message || String(err), "error");
+      }
+      bindActiveDocToEditor();
+      schedulePersistSession();
+      if (truncated) {
+        setStatus(
+          opened
+            ? `已打开 ${opened} 个文件，其余因标签上限（20）未打开`
+            : "标签已达上限（20）",
+          "error"
+        );
+      } else if (opened === 1) {
+        setStatus(`已打开 ${lastName}`, "ok");
+      } else if (opened > 1) {
+        setStatus(`已打开 ${opened} 个文件`, "ok");
       }
       return;
     }
@@ -829,6 +1267,12 @@
       typeof payload === "string" &&
       payload.trim()
     ) {
+      flushEditorToActiveDoc();
+      const created = WS.newTab(ws);
+      if (!created.ok) {
+        setStatus("标签已达上限（20）", "error");
+        return;
+      }
       try {
         let text = payload;
         try {
@@ -841,21 +1285,38 @@
           }
         }
         setEditorText(text, { clearFile: true, immediate: true });
+        schedulePersistSession();
         setStatus("已载入选中文本", "ok");
       } catch (err) {
         setEditorText(payload, { clearFile: true, immediate: true });
+        schedulePersistSession();
       }
     }
   }
 
-  if (window.utools && typeof utools.onPluginEnter === "function") {
-    utools.onPluginEnter(handlePluginEnter);
+  if (window.utools) {
+    if (typeof utools.onPluginReady === "function") {
+      utools.onPluginReady(restoreSession);
+    }
+    if (typeof utools.onPluginEnter === "function") {
+      utools.onPluginEnter(handlePluginEnter);
+    }
+    if (typeof utools.onPluginOut === "function") {
+      utools.onPluginOut(() => {
+        if (sessionWriteTimer) {
+          clearTimeout(sessionWriteTimer);
+          sessionWriteTimer = null;
+        }
+        persistSession();
+      });
+    }
   }
 
   // 开发态：无内容时给一个示例，方便浏览器直接打开自检
   if (!window.utools && !els.editor.value) {
     setEditorText('{"hello":"DotJSON","items":[1,true,null]}', { immediate: true });
   } else {
-    refreshTree();
+    bindActiveDocToEditor();
   }
+  renderTabs();
 })();

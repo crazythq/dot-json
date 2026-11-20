@@ -34,7 +34,7 @@
           "fileType": "file",
           "extensions": ["json", "JSON"],
           "minLength": 1,
-          "maxLength": 1
+          "maxLength": 20
         }
       ]
     }

@@ -13,7 +13,8 @@ utools/
 ├── app/
 │   └── main.js        # UI 绑定、树渲染、utools 生命周期
 ├── state/
-│   └── document.js    # 单文档状态（文本 / 路径 / 脏标记 / 缩进）
+│   ├── document.js    # 单文档状态（文本 / 路径 / 脏标记 / 缩进 / 标题）
+│   └── workspace.js   # 多标签工作区、会话快照、最近文件列表（无 DOM）
 ├── lib/
 │   ├── json-core.js       # 格式化 / 压缩 / 修复 / 树模型 / 错误行号
 │   ├── python-literal.js  # JSON ↔ Python literal
@@ -22,14 +23,15 @@ utools/
 │   ├── run-json-core.js       # json-core 契约测试
 │   ├── run-document.js        # document 契约测试
 │   ├── run-python-literal.js  # Python 转换契约测试
-│   └── run-tree-edit.js       # 树编辑契约测试
+│   ├── run-tree-edit.js       # 树编辑契约测试
+│   └── run-workspace.js       # workspace 契约测试（P2）
 ├── logo.png           # 插件图标（256×256）
 ├── icon.png           # 1024 源图标
 └── README.md
 ```
 
 - **preload**：仅暴露 [`window.services`](preload.js)（读写字面路径、剪贴板、会话文件占位 `readSession` / `writeSession`）。不暴露 `fs` 整包，不使用已废弃的 `window.dotjson`。
-- **入口**：`index.html` 按 `lib` → `state` → `app` 顺序加载脚本。
+- **入口**：`index.html` 按 `lib` → `state`（`document` → `workspace`）→ `app` 顺序加载脚本。
 
 ## 在 uTools 中加载（开发模式）
 
@@ -54,7 +56,7 @@ utools/
 | 双击展开收起 | 容器节点 | TR-03 |
 | 树搜索 | 防抖 200ms，↑↓ / Enter 切换命中并展开祖先 | SE-03 ~ SE-08 |
 | 右键菜单 | Copy Key / Value / JSON Path | CM-01 ~ CM-03 |
-| 指令 | `json` / `dotjson`；选中文本 over；`.json` 文件匹配（**单文件**，`files.maxLength: 1`） | — |
+| 指令 | `json` / `dotjson`；选中文本 over（P0 覆盖当前；P2 见下节）；`.json` 文件匹配 | — |
 
 ## 功能清单（P1）
 
@@ -69,9 +71,22 @@ utools/
 | 编辑器查找 | 简易查找条：下一项 / 上一项 |
 | 解析错误行号 | 能从引擎 message 提取位置时显示行号；否则仅原文（降级） |
 
-## 未移植 / 后续阶段
+## 功能清单（P2）
 
-P1 仍不包含多标签、Diff、JSONL、设置页、拖放等。完整能力矩阵与分阶段计划见：
+| 功能 | 说明 |
+|------|------|
+| 多标签 | 新建、切换、关闭、双击/菜单改名、复制标签 |
+| 标签上限 | 最多 **20** 个；超出时提示 |
+| 会话恢复 | 退出插件再进入，从 `session-v1.json` 恢复标签与激活项（**uTools 人工**） |
+| 最近文件 | 最多 **10** 条路径，MRU，经 `utools.dbStorage` |
+| 多文件打开 | 打开对话框多选；`plugin.json` 中 `files.maxLength: 20` |
+| over 指令 | 选中文本「用 DotJSON 打开」→ **新建标签**装入，不覆盖当前未保存内容（**uTools 人工**） |
+
+分阶段实现计划：[docs/superpowers/plans/2026-11-19-utools-feature-parity-p2.md](../docs/superpowers/plans/2026-11-19-utools-feature-parity-p2.md)
+
+## 未移植 / 后续阶段（P3+）
+
+P2 仍不包含 Diff、JSONL、设置页、拖放等。完整能力矩阵见：
 
 [docs/superpowers/specs/2026-11-19-utools-feature-parity-design.md](../docs/superpowers/specs/2026-11-19-utools-feature-parity-design.md)
 
@@ -86,7 +101,7 @@ cd utools
 for f in tests/run-*.js; do node "$f" || exit 1; done
 ```
 
-或逐个运行：`run-document.js`、`run-json-core.js`、`run-python-literal.js`、`run-tree-edit.js`。均应退出码 `0`，且不依赖 DOM / `utools`。
+或逐个运行：`run-document.js`、`run-json-core.js`、`run-python-literal.js`、`run-tree-edit.js`、`run-workspace.js`。均应退出码 `0`，且不依赖 DOM / `utools`。
 
 ## P0 手工验收（uTools 开发者模式）
 
@@ -94,7 +109,7 @@ for f in tests/run-*.js; do node "$f" || exit 1; done
 2. 格式化 / 压缩 / 修复 / 缩进与改前一致。
 3. 打开 / 导出文件可用。
 4. 选中文本 →「用 DotJSON 打开」仍可用。
-5. 选中 `.json` 文件匹配仍可用（单文件）。
+5. 选中 `.json` 文件匹配仍可用（P2 起最多 20 个，见 P2 清单）。
 6. 工具栏为文字按钮，无 macOS 图标栏。
 
 ## P1 验收清单
@@ -108,6 +123,22 @@ for f in tests/run-*.js; do node "$f" || exit 1; done
 5. **编辑器查找** — 查找条上一项 / 下一项跳转正确。
 6. **非法 JSON 错误** — 解析失败时，能提取行号则展示行号，否则显示原始错误（降级）。
 7. **契约测试** — `node tests/run-*.js` 全部通过（见上节命令）。
+
+## P2 验收清单
+
+**Node（自动化）**
+
+1. **契约测试** — 在 `utools/` 下执行 `for f in tests/run-*.js; do node "$f" || exit 1; done`，含 `run-workspace.js`，全部退出码 `0`。
+
+**uTools 开发者模式（人工）**
+
+2. **多标签** — 新建 / 切换 / 关闭 / 改名 / 复制标签行为正确。
+3. **标签上限 20** — 第 21 个标签被拒绝并有提示。
+4. **会话恢复** — 打开多个标签（含未保存、未关联路径）后退出插件再进入，标签与激活项恢复。
+5. **最近文件** — 打开文件后出现在最近列表；超过 10 条时淘汰最旧项。
+6. **多选打开** — 系统打开对话框可多选 JSON；从搜索匹配多个 `.json` 文件时各进一标签。
+7. **over** — 选中文本用 DotJSON 打开时新建标签，不冲掉当前标签未保存内容。
+8. **P1 回归** — 上节 P1 清单 1–6 仍通过。
 
 ## 本地 UI 预览（可选）
 

@@ -4,8 +4,12 @@
 (function (global) {
   "use strict";
 
+  let nextId = 1;
+
   function create() {
     return {
+      id: "doc-" + nextId++,
+      title: "",
       rawText: "",
       filePath: null,
       fileName: "",
@@ -23,11 +27,13 @@
   function setFile(doc, info) {
     doc.filePath = info && info.filePath ? String(info.filePath) : null;
     doc.fileName = info && info.fileName ? String(info.fileName) : "";
+    doc.title = "";
   }
 
   function clearFile(doc) {
     doc.filePath = null;
     doc.fileName = "";
+    doc.title = "";
   }
 
   function setIndent(doc, indentKey) {

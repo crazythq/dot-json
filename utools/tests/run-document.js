@@ -27,16 +27,21 @@ Doc.setText(doc, '{"a":1}', { markDirty: true });
 assertEqual(doc.rawText, '{"a":1}', "setText");
 assertEqual(doc.isDirty, true, "dirty after setText");
 
+Doc.setText(doc, "", {});
+doc.title = "Untitled 1";
 Doc.setFile(doc, { filePath: "/tmp/a.json", fileName: "a.json" });
 assertEqual(doc.filePath, "/tmp/a.json", "setFile path");
 assertEqual(doc.fileName, "a.json", "setFile name");
+assertEqual(doc.title, "", "setFile clears custom title");
 
 Doc.markSaved(doc);
 assertEqual(doc.isDirty, false, "markSaved");
 
+doc.title = "Untitled 2";
 Doc.clearFile(doc);
 assertEqual(doc.filePath, null, "clearFile");
 assertEqual(doc.fileName, "", "clearFile name");
+assertEqual(doc.title, "", "clearFile clears custom title");
 
 Doc.setIndent(doc, "twoSpaces");
 assertEqual(doc.indentKey, "twoSpaces", "setIndent");
