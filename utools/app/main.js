@@ -2,6 +2,7 @@
   "use strict";
 
   const core = window.DotJSONCore;
+  const Diff = window.DotJSONDiff;
   const Doc = window.DotJSONDocument;
   const WS = window.DotJSONWorkspace;
   const py = window.DotJSONPython;
@@ -30,6 +31,12 @@
     tabList: document.getElementById("tab-list"),
     splitter: document.getElementById("splitter"),
     editorPane: document.querySelector(".pane-editor"),
+    diffPanel: document.getElementById("diff-panel"),
+    diffLeftSelect: document.getElementById("diff-left-select"),
+    diffRightSelect: document.getElementById("diff-right-select"),
+    diffLeftText: document.getElementById("diff-left-text"),
+    diffRightText: document.getElementById("diff-right-text"),
+    diffRows: document.getElementById("diff-rows"),
   };
 
   const state = {
@@ -46,6 +53,9 @@
     editorSearchTimer: null,
     parseTimer: null,
     lastParseOk: true,
+    diffCompare: null,
+    diffSelectedPath: null,
+    diffCompareTimer: null,
   };
 
   function activeDoc() {
@@ -848,6 +858,307 @@
     copyText(els.editor.value);
     setStatus("已复制全文", "ok");
   });
+
+  function summarizeDiffValue(value) {
+    if (value === undefined) return "—";
+    try {
+      const text = JSON.stringify(value);
+      if (text == null) return String(value);
+      return text.length > 80 ? text.slice(0, 77) + "..." : text;
+    } catch (err) {
+      return String(value);
+    }
+  }
+
+  function parseDiffSelectIndex(selectEl) {
+    if (!selectEl) return -1;
+    const raw = selectEl.value;
+    if (raw === "" || raw == null) return -1;
+    const index = Number(raw);
+    return Number.isInteger(index) ? index : -1;
+  }
+
+  function fillDiffTabSelects(preferredLeft, preferredRight) {
+    if (!els.diffLeftSelect || !els.diffRightSelect) return;
+    const leftKeep = preferredLeft != null ? preferredLeft : parseDiffSelectIndex(els.diffLeftSelect);
+    const rightKeep =
+      preferredRight != null ? preferredRight : parseDiffSelectIndex(els.diffRightSelect);
+    const makeOptions = (selectEl, selectedIndex) => {
+      selectEl.innerHTML = "";
+      const empty = document.createElement("option");
+      empty.value = "";
+      empty.textContent = "（未选择）";
+      selectEl.appendChild(empty);
+      ws.tabs.forEach((doc, index) => {
+        const opt = document.createElement("option");
+        opt.value = String(index);
+        opt.textContent = tabDisplayName(doc, index);
+        selectEl.appendChild(opt);
+      });
+      if (selectedIndex >= 0 && selectedIndex < ws.tabs.length) {
+        selectEl.value = String(selectedIndex);
+      } else {
+        selectEl.value = "";
+      }
+    };
+    makeOptions(els.diffLeftSelect, leftKeep);
+    makeOptions(els.diffRightSelect, rightKeep);
+  }
+
+  function loadDiffSideFromTab(side) {
+    const selectEl = side === "left" ? els.diffLeftSelect : els.diffRightSelect;
+    const textEl = side === "left" ? els.diffLeftText : els.diffRightText;
+    if (!selectEl || !textEl) return;
+    const index = parseDiffSelectIndex(selectEl);
+    if (index < 0 || index >= ws.tabs.length) {
+      textEl.value = "";
+      return;
+    }
+    if (index === ws.activeIndex) flushEditorToActiveDoc();
+    const doc = ws.tabs[index];
+    textEl.value = doc && doc.rawText != null ? String(doc.rawText) : "";
+  }
+
+  function renderDiffRows() {
+    if (!els.diffRows) return;
+    els.diffRows.innerHTML = "";
+    const rows = state.diffCompare && state.diffCompare.rows ? state.diffCompare.rows : [];
+    if (!rows.length) {
+      const empty = document.createElement("div");
+      empty.className = "diff-rows-empty";
+      empty.textContent = state.diffCompare ? "无差异" : "选择两侧来源后对比";
+      els.diffRows.appendChild(empty);
+      return;
+    }
+    rows.forEach((row) => {
+      const item = document.createElement("div");
+      item.className = "diff-row";
+      item.setAttribute("role", "option");
+      item.dataset.path = row.path || "";
+      item.dataset.kind = row.kind || "";
+      if (state.diffSelectedPath != null && state.diffSelectedPath === row.path) {
+        item.classList.add("is-selected");
+      }
+      const pathEl = document.createElement("span");
+      pathEl.className = "diff-col-path";
+      pathEl.textContent = row.path || "(root)";
+      const kindEl = document.createElement("span");
+      kindEl.className = "diff-col-kind";
+      kindEl.textContent = row.kind || "";
+      const leftEl = document.createElement("span");
+      leftEl.className = "diff-col-left";
+      leftEl.textContent = summarizeDiffValue(row.leftValue);
+      leftEl.title = summarizeDiffValue(row.leftValue);
+      const rightEl = document.createElement("span");
+      rightEl.className = "diff-col-right";
+      rightEl.textContent = summarizeDiffValue(row.rightValue);
+      rightEl.title = summarizeDiffValue(row.rightValue);
+      item.appendChild(pathEl);
+      item.appendChild(kindEl);
+      item.appendChild(leftEl);
+      item.appendChild(rightEl);
+      item.addEventListener("click", () => {
+        state.diffSelectedPath = row.path;
+        renderDiffRows();
+      });
+      els.diffRows.appendChild(item);
+    });
+  }
+
+  function runDiffCompare(opts) {
+    const options = opts || {};
+    if (!Diff || typeof Diff.compare !== "function") {
+      setStatus("Diff 模块未加载", "error");
+      return false;
+    }
+    const leftText = els.diffLeftText ? els.diffLeftText.value : "";
+    const rightText = els.diffRightText ? els.diffRightText.value : "";
+    const leftIndex = parseDiffSelectIndex(els.diffLeftSelect);
+    const rightIndex = parseDiffSelectIndex(els.diffRightSelect);
+    if (leftIndex < 0 || rightIndex < 0) {
+      state.diffCompare = null;
+      state.diffSelectedPath = null;
+      renderDiffRows();
+      if (!options.silent) setStatus("请选择两个标签进行对比", "error");
+      return false;
+    }
+    if (leftIndex === rightIndex && ws.tabs.length < 2) {
+      state.diffCompare = null;
+      state.diffSelectedPath = null;
+      renderDiffRows();
+      if (!options.silent) setStatus("请再打开一个标签后再对比", "error");
+      return false;
+    }
+    const indentKey =
+      (ws.tabs[leftIndex] && ws.tabs[leftIndex].indentKey) || els.indent.value || "fourSpaces";
+    try {
+      const result = Diff.compare(leftText, rightText, indentKey);
+      state.diffCompare = result;
+      if (
+        state.diffSelectedPath != null &&
+        !result.rows.some((row) => row.path === state.diffSelectedPath)
+      ) {
+        state.diffSelectedPath = null;
+      }
+      if (els.diffLeftText) els.diffLeftText.value = result.leftPretty;
+      if (els.diffRightText) els.diffRightText.value = result.rightPretty;
+      renderDiffRows();
+      if (!options.silent) {
+        setStatus(
+          result.rows.length ? `发现 ${result.rows.length} 处差异` : "两侧相同",
+          result.rows.length ? "ok" : "ok"
+        );
+      }
+      return true;
+    } catch (err) {
+      state.diffCompare = null;
+      state.diffSelectedPath = null;
+      renderDiffRows();
+      const side = err && err.side ? (err.side === "left" ? "左" : "右") : "";
+      const message = err && err.message ? err.message : String(err);
+      setStatus(side ? `${side}侧 JSON 无效: ${message}` : `对比失败: ${message}`, "error");
+      return false;
+    }
+  }
+
+  function scheduleDiffCompare() {
+    clearTimeout(state.diffCompareTimer);
+    state.diffCompareTimer = setTimeout(() => runDiffCompare({ silent: true }), 200);
+  }
+
+  function writeDiffValueToTab(tabIndex, value) {
+    if (tabIndex < 0 || tabIndex >= ws.tabs.length) return "";
+    const doc = ws.tabs[tabIndex];
+    const indentKey = (doc && doc.indentKey) || els.indent.value || "fourSpaces";
+    const text = core.format(JSON.stringify(value), indentKey);
+    Doc.setText(doc, text, { markDirty: true });
+    if (tabIndex === ws.activeIndex) {
+      els.editor.value = text;
+      updateDirtyMark();
+      scheduleParse(true);
+    } else {
+      updateDirtyMark();
+    }
+    schedulePersistSession();
+    return text;
+  }
+
+  function applyDiffDirection(direction, all) {
+    if (!state.diffCompare) {
+      setStatus("请先完成对比", "error");
+      return;
+    }
+    const leftIndex = parseDiffSelectIndex(els.diffLeftSelect);
+    const rightIndex = parseDiffSelectIndex(els.diffRightSelect);
+    if (leftIndex < 0 || rightIndex < 0) {
+      setStatus("请选择左右标签", "error");
+      return;
+    }
+    let result;
+    if (all) {
+      result = Diff.applyAll(
+        state.diffCompare.rows,
+        direction,
+        state.diffCompare.leftRoot,
+        state.diffCompare.rightRoot
+      );
+    } else {
+      const row = state.diffCompare.rows.find((r) => r.path === state.diffSelectedPath);
+      if (!row) {
+        setStatus("请先选中一条差异", "error");
+        return;
+      }
+      result = Diff.apply(row, direction, state.diffCompare.leftRoot, state.diffCompare.rightRoot);
+    }
+    if (direction === "toLeft") {
+      const text = writeDiffValueToTab(leftIndex, result.left);
+      if (els.diffLeftText) els.diffLeftText.value = text;
+    } else {
+      const text = writeDiffValueToTab(rightIndex, result.right);
+      if (els.diffRightText) els.diffRightText.value = text;
+    }
+    runDiffCompare({ silent: true });
+    setStatus(all ? (direction === "toLeft" ? "已全部应用到左" : "已全部应用到右") : (direction === "toLeft" ? "已应用到左" : "已应用到右"), "ok");
+  }
+
+  function openDiffPanel() {
+    if (!els.diffPanel) return;
+    flushEditorToActiveDoc();
+    const leftIndex = ws.activeIndex;
+    let rightIndex = -1;
+    if (ws.tabs.length >= 2) {
+      rightIndex = leftIndex === 0 ? 1 : 0;
+    }
+    fillDiffTabSelects(leftIndex, rightIndex);
+    loadDiffSideFromTab("left");
+    loadDiffSideFromTab("right");
+    state.diffSelectedPath = null;
+    els.diffPanel.hidden = false;
+    if (rightIndex < 0) {
+      state.diffCompare = null;
+      renderDiffRows();
+      setStatus("请再打开一个标签后再对比", "error");
+      return;
+    }
+    runDiffCompare();
+  }
+
+  function closeDiffPanel() {
+    if (!els.diffPanel) return;
+    els.diffPanel.hidden = true;
+    clearTimeout(state.diffCompareTimer);
+    state.diffCompareTimer = null;
+  }
+
+  document.getElementById("btn-diff").addEventListener("click", openDiffPanel);
+  document.getElementById("diff-close").addEventListener("click", closeDiffPanel);
+  document.getElementById("diff-left-current").addEventListener("click", () => {
+    if (!els.diffLeftSelect) return;
+    els.diffLeftSelect.value = String(ws.activeIndex);
+    loadDiffSideFromTab("left");
+    runDiffCompare();
+  });
+  document.getElementById("diff-right-current").addEventListener("click", () => {
+    if (!els.diffRightSelect) return;
+    els.diffRightSelect.value = String(ws.activeIndex);
+    loadDiffSideFromTab("right");
+    runDiffCompare();
+  });
+  if (els.diffLeftSelect) {
+    els.diffLeftSelect.addEventListener("change", () => {
+      loadDiffSideFromTab("left");
+      runDiffCompare();
+    });
+  }
+  if (els.diffRightSelect) {
+    els.diffRightSelect.addEventListener("change", () => {
+      loadDiffSideFromTab("right");
+      runDiffCompare();
+    });
+  }
+  if (els.diffLeftText) {
+    els.diffLeftText.addEventListener("input", scheduleDiffCompare);
+  }
+  if (els.diffRightText) {
+    els.diffRightText.addEventListener("input", scheduleDiffCompare);
+  }
+  document.getElementById("diff-apply-left").addEventListener("click", () => {
+    applyDiffDirection("toLeft", false);
+  });
+  document.getElementById("diff-apply-right").addEventListener("click", () => {
+    applyDiffDirection("toRight", false);
+  });
+  document.getElementById("diff-apply-all-left").addEventListener("click", () => {
+    applyDiffDirection("toLeft", true);
+  });
+  document.getElementById("diff-apply-all-right").addEventListener("click", () => {
+    applyDiffDirection("toRight", true);
+  });
+  if (els.diffPanel) {
+    els.diffPanel.addEventListener("click", (event) => {
+      if (event.target === els.diffPanel) closeDiffPanel();
+    });
+  }
 
   document.getElementById("btn-new-tab").addEventListener("click", createNewTab);
 

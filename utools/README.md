@@ -17,10 +17,12 @@ utools/
 │   └── workspace.js   # 多标签工作区、会话快照、最近文件列表（无 DOM）
 ├── lib/
 │   ├── json-core.js       # 格式化 / 压缩 / 修复 / 树模型 / 错误行号
+│   ├── json-diff.js       # 路径级 structured diff / apply（P3）
 │   ├── python-literal.js  # JSON ↔ Python literal
 │   └── tree-edit.js       # 树删节点、子孙 id 收集
 ├── tests/
 │   ├── run-json-core.js       # json-core 契约测试
+│   ├── run-json-diff.js       # json-diff 契约测试（P3）
 │   ├── run-document.js        # document 契约测试
 │   ├── run-python-literal.js  # Python 转换契约测试
 │   ├── run-tree-edit.js       # 树编辑契约测试
@@ -84,9 +86,23 @@ utools/
 
 分阶段实现计划：[docs/superpowers/plans/2026-11-19-utools-feature-parity-p2.md](../docs/superpowers/plans/2026-11-19-utools-feature-parity-p2.md)
 
-## 未移植 / 后续阶段（P3+）
+## 功能清单（P3）
 
-P2 仍不包含 Diff、JSONL、设置页、拖放等。完整能力矩阵见：
+| 功能 | 说明 |
+|------|------|
+| JSON Diff | 工具栏「对比」打开 Diff 面板 |
+| 左右来源 | 选择标签或粘贴；默认左=当前标签、右=另一标签 |
+| 差异列表 | 路径、kind（add/remove/change）、左右值摘要 |
+| 单条应用 | 选中一行 → 应用到左 / 应用到右 |
+| 全部应用 | 全部到左 / 全部到右；写回对应标签并标记脏 |
+| 非法 JSON | 对比时一侧 parse 失败 → 状态栏报错（含左右标识） |
+| 契约测试 | `node tests/run-json-diff.js` |
+
+分阶段实现计划：[docs/superpowers/plans/2026-11-19-utools-feature-parity-p3.md](../docs/superpowers/plans/2026-11-19-utools-feature-parity-p3.md)
+
+## 未移植 / 后续阶段（P4+）
+
+P3 仍不包含 JSONL、设置页、拖放等。完整能力矩阵见：
 
 [docs/superpowers/specs/2026-11-19-utools-feature-parity-design.md](../docs/superpowers/specs/2026-11-19-utools-feature-parity-design.md)
 
@@ -101,7 +117,7 @@ cd utools
 for f in tests/run-*.js; do node "$f" || exit 1; done
 ```
 
-或逐个运行：`run-document.js`、`run-json-core.js`、`run-python-literal.js`、`run-tree-edit.js`、`run-workspace.js`。均应退出码 `0`，且不依赖 DOM / `utools`。
+或逐个运行：`run-document.js`、`run-json-core.js`、`run-json-diff.js`、`run-python-literal.js`、`run-tree-edit.js`、`run-workspace.js`。均应退出码 `0`，且不依赖 DOM / `utools`。
 
 ## P0 手工验收（uTools 开发者模式）
 
@@ -139,6 +155,21 @@ for f in tests/run-*.js; do node "$f" || exit 1; done
 6. **多选打开** — 系统打开对话框可多选 JSON；从搜索匹配多个 `.json` 文件时各进一标签。
 7. **over** — 选中文本用 DotJSON 打开时新建标签，不冲掉当前标签未保存内容。
 8. **P1 回归** — 上节 P1 清单 1–6 仍通过。
+
+## P3 验收清单
+
+**Node（自动化）**
+
+1. **契约测试** — 在 `utools/` 下执行 `for f in tests/run-*.js; do node "$f" || exit 1; done`，含 `run-json-diff.js`，全部退出码 `0`。
+
+**uTools 开发者模式（人工）**
+
+2. **打开对比** — 工具栏「对比」显示 Diff 面板；可关闭。
+3. **差异列表** — 两标签（或左右文本）内容不同 JSON 时列出 path / kind。
+4. **单条应用** — 选中一行应用到左或右后，对应标签正文更新且变脏；激活标签时编辑器同步。
+5. **全部应用** — 全部到左 / 全部到右后内容与预期一致。
+6. **非法 JSON** — 一侧非法 JSON 时对比失败并有可读错误提示。
+7. **P2 回归** — 上节 P2 清单 2–8 仍通过。
 
 ## 本地 UI 预览（可选）
 
