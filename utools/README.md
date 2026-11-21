@@ -13,27 +13,33 @@ utools/
 ├── app/
 │   └── main.js        # UI 绑定、树渲染、utools 生命周期
 ├── state/
-│   ├── document.js    # 单文档状态（文本 / 路径 / 脏标记 / 缩进 / 标题）
-│   └── workspace.js   # 多标签工作区、会话快照、最近文件列表（无 DOM）
+│   ├── document.js        # 单文档状态（文本 / 路径 / 脏标记 / 缩进 / 标题）
+│   ├── preferences.js     # 默认缩进等偏好（P4）
+│   └── workspace.js       # 多标签工作区、会话快照、最近文件列表（无 DOM）
 ├── lib/
 │   ├── json-core.js       # 格式化 / 压缩 / 修复 / 树模型 / 错误行号
 │   ├── json-diff.js       # 路径级 structured diff / apply（P3）
+│   ├── jsonl.js           # JSONL 预解析 / 按行导航（P4）
 │   ├── python-literal.js  # JSON ↔ Python literal
+│   ├── safe-path.js       # 用户路径校验（preload 共用）
 │   └── tree-edit.js       # 树删节点、子孙 id 收集
 ├── tests/
-│   ├── run-json-core.js       # json-core 契约测试
-│   ├── run-json-diff.js       # json-diff 契约测试（P3）
-│   ├── run-document.js        # document 契约测试
-│   ├── run-python-literal.js  # Python 转换契约测试
-│   ├── run-tree-edit.js       # 树编辑契约测试
-│   └── run-workspace.js       # workspace 契约测试（P2）
+│   ├── run-json-core.js
+│   ├── run-json-diff.js
+│   ├── run-jsonl.js
+│   ├── run-preferences.js
+│   ├── run-document.js
+│   ├── run-python-literal.js
+│   ├── run-safe-path.js
+│   ├── run-tree-edit.js
+│   └── run-workspace.js
 ├── logo.png           # 插件图标（256×256）
 ├── icon.png           # 1024 源图标
 └── README.md
 ```
 
 - **preload**：仅暴露 [`window.services`](preload.js)（读写字面路径、剪贴板、会话文件占位 `readSession` / `writeSession`）。不暴露 `fs` 整包，不使用已废弃的 `window.dotjson`。
-- **入口**：`index.html` 按 `lib` → `state`（`document` → `workspace`）→ `app` 顺序加载脚本。
+- **入口**：`index.html` 按 `lib` → `state`（`document` → `preferences` → `workspace`）→ `app` 顺序加载脚本。
 
 ## 在 uTools 中加载（开发模式）
 
@@ -100,13 +106,25 @@ utools/
 
 分阶段实现计划：[docs/superpowers/plans/2026-11-19-utools-feature-parity-p3.md](../docs/superpowers/plans/2026-11-19-utools-feature-parity-p3.md)
 
-## 未移植 / 后续阶段（P4+）
+## 功能清单（P4）
 
-P3 仍不包含 JSONL、设置页、拖放等。完整能力矩阵见：
+| 功能 | 说明 |
+|------|------|
+| JSONL 浏览 | 工具栏「JSONL」或打开 `.jsonl` 进入；上一条 / 下一条 / 记录列表 |
+| 当前记录 | 编辑器与树只展示当前记录；无效行可定位并提示 |
+| 保存 | 写回多行 JSONL（记录用 `\n` 拼接；原空白行位置不保留；合法记录切走时 minify 回单行） |
+| 会话 | 快照含 `jsonlMode`（记录列表与当前下标），恢复后仍为浏览模式 |
+| 设置 | 工具栏「设置」；默认缩进存 `dbStorage`（`dotjson.defaultIndent`） |
+| 默认缩进作用域 | **仅新建标签**；已打开文档的缩进不变 |
+| 文件匹配 / 打开 | `plugin.json` 与打开对话框接受 `jsonl` |
+
+分阶段实现计划：[docs/superpowers/plans/2026-11-21-utools-feature-parity-p4.md](../docs/superpowers/plans/2026-11-21-utools-feature-parity-p4.md)
+
+## 明确不做
+
+窗口内拖放、Finder 关联、自建 GitHub 更新、CLI、`dotjson` 打进插件、macOS SF Symbols 工具栏图标。完整矩阵见：
 
 [docs/superpowers/specs/2026-11-19-utools-feature-parity-design.md](../docs/superpowers/specs/2026-11-19-utools-feature-parity-design.md)
-
-明确不做：窗口内拖放、Finder 关联、自建 GitHub 更新、CLI、`dotjson` 打进插件、macOS SF Symbols 工具栏图标。
 
 ## 契约测试
 
@@ -117,7 +135,7 @@ cd utools
 for f in tests/run-*.js; do node "$f" || exit 1; done
 ```
 
-或逐个运行：`run-document.js`、`run-json-core.js`、`run-json-diff.js`、`run-python-literal.js`、`run-tree-edit.js`、`run-workspace.js`。均应退出码 `0`，且不依赖 DOM / `utools`。
+或逐个运行：`run-document.js`、`run-json-core.js`、`run-json-diff.js`、`run-jsonl.js`、`run-preferences.js`、`run-python-literal.js`、`run-safe-path.js`、`run-tree-edit.js`、`run-workspace.js`。均应退出码 `0`，且不依赖 DOM / `utools`。
 
 ## P0 手工验收（uTools 开发者模式）
 
@@ -170,6 +188,21 @@ for f in tests/run-*.js; do node "$f" || exit 1; done
 5. **全部应用** — 全部到左 / 全部到右后内容与预期一致。
 6. **非法 JSON** — 一侧非法 JSON 时对比失败并有可读错误提示。
 7. **P2 回归** — 上节 P2 清单 2–8 仍通过。
+
+## P4 验收清单
+
+**Node（自动化）**
+
+1. **契约测试** — 在 `utools/` 下执行 `for f in tests/run-*.js; do node "$f" || exit 1; done`，含 `run-jsonl.js`、`run-preferences.js`，全部退出码 `0`。
+
+**uTools 开发者模式（人工）**
+
+2. **打开 `.jsonl`** — 进入浏览模式；上一条 / 下一条 / 列表跳转正确。
+3. **无效行** — 可定位且状态栏提示。
+4. **保存** — 写回多行 JSONL。
+5. **设置默认缩进** — 新建标签用新缩进；旧标签不变。
+6. **files / 对话框** — 可匹配或打开 jsonl。
+7. **P3 回归** — 上节 P3 清单 2–7 仍通过。
 
 ## 本地 UI 预览（可选）
 

@@ -29,6 +29,7 @@
         <button type="button" id="btn-paste" title="从剪贴板粘贴并尝试格式化">粘贴</button>
         <button type="button" id="btn-copy" title="复制全文">复制</button>
         <button type="button" id="btn-diff" title="JSON 对比">对比</button>
+        <button type="button" id="btn-jsonl" title="按 JSONL 浏览当前文本">JSONL</button>
       </div>
       <div class="toolbar-group">
         <button type="button" id="btn-open" title="打开文件">打开</button>
@@ -36,6 +37,7 @@
         <button type="button" id="btn-save" title="保存">保存</button>
         <button type="button" id="btn-save-as" title="另存为">另存为</button>
         <button type="button" id="btn-export" title="导出到文件">导出</button>
+        <button type="button" id="btn-settings" title="设置">设置</button>
       </div>
       <div class="status" id="status" aria-live="polite">就绪</div>
     </header>
@@ -65,6 +67,12 @@
             <span id="editor-search-count" class="search-count"></span>
           </div>
         </div>
+        <div id="jsonl-bar" class="jsonl-bar" hidden>
+          <button type="button" id="jsonl-prev" title="上一条">上一条</button>
+          <span id="jsonl-pos" class="jsonl-pos">0 / 0</span>
+          <button type="button" id="jsonl-next" title="下一条">下一条</button>
+          <button type="button" id="jsonl-exit" title="退出 JSONL 浏览">退出浏览</button>
+        </div>
         <textarea
           id="editor"
           spellcheck="false"
@@ -91,6 +99,7 @@
             <span id="search-count" class="search-count"></span>
           </div>
         </div>
+        <div id="jsonl-list" class="jsonl-list" hidden></div>
         <div id="tree" class="tree" tabindex="0"></div>
       </section>
     </main>
@@ -112,6 +121,22 @@
   </ul>
 
   <ul id="recent-menu" class="context-menu recent-menu" hidden></ul>
+
+  <div id="settings-panel" class="settings-panel" hidden>
+    <div class="settings-card" role="dialog" aria-label="设置">
+      <h2>设置</h2>
+      <label class="settings-field">
+        默认缩进
+        <select id="settings-default-indent" aria-label="默认缩进">
+          <option value="twoSpaces">2 spaces</option>
+          <option value="fourSpaces">4 spaces</option>
+          <option value="tab">Tab</option>
+        </select>
+      </label>
+      <p class="settings-hint">仅影响新建标签，不改变已打开文档。</p>
+      <button type="button" id="settings-close">关闭</button>
+    </div>
+  </div>
 
   <div id="diff-panel" class="diff-panel" hidden>
     <div class="diff-panel-inner">
@@ -173,9 +198,11 @@
 
   <script src="lib/json-core.js"></script>
   <script src="lib/json-diff.js"></script>
+  <script src="lib/jsonl.js"></script>
   <script src="lib/python-literal.js"></script>
   <script src="lib/tree-edit.js"></script>
   <script src="state/document.js"></script>
+  <script src="state/preferences.js"></script>
   <script src="state/workspace.js"></script>
   <script src="app/main.js"></script>
 </body>

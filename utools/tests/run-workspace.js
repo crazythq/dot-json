@@ -134,5 +134,45 @@ assertEqual(reused.ok, true, "reuse empty ok");
 assertEqual(ws.tabs.length, 1, "reuse empty no extra tab");
 assertEqual(ws.tabs[0].filePath, "/tmp/u.json", "reuse empty path set");
 
+// jsonlMode: snapshot + duplicate
+ws = WS.create();
+WS.ensureTab(ws);
+ws.tabs[0].rawText = '{"a":1}\n{"b":2}';
+ws.tabs[0].filePath = "/tmp/x.jsonl";
+ws.tabs[0].fileName = "x.jsonl";
+ws.tabs[0].jsonlMode = {
+  recordIndex: 1,
+  lines: [
+    { index: 0, rawText: '{"a":1}', byteOffset: 0, isValid: true },
+    { index: 1, rawText: '{"b":2}', byteOffset: 8, isValid: true },
+  ],
+};
+Doc.setText(ws.tabs[0], ws.tabs[0].rawText, { markDirty: true });
+const snapJsonl = WS.toSnapshot(ws);
+assert(!!snapJsonl.tabs[0].jsonlMode, "snapshot has jsonlMode");
+assertEqual(snapJsonl.tabs[0].jsonlMode.recordIndex, 1, "snapshot recordIndex");
+const wsJsonl = WS.fromSnapshot(snapJsonl);
+assert(!!wsJsonl.tabs[0].jsonlMode, "restore jsonlMode");
+assertEqual(wsJsonl.tabs[0].jsonlMode.recordIndex, 1, "restore recordIndex");
+assertEqual(wsJsonl.tabs[0].jsonlMode.lines.length, 2, "restore lines");
+assertEqual(WS.duplicateTab(wsJsonl, 0).ok, true, "dup jsonl ok");
+assert(!!wsJsonl.tabs[1].jsonlMode, "dup copies jsonlMode");
+assertEqual(wsJsonl.tabs[1].jsonlMode.recordIndex, 1, "dup recordIndex");
+assertEqual(wsJsonl.tabs[1].filePath, null, "dup clears path");
+
+// dirty openPath reuse flag
+ws = WS.create();
+WS.ensureTab(ws);
+WS.openPath(ws, { filePath: "/tmp/d.jsonl", fileName: "d.jsonl", rawText: '{"v":1}' });
+Doc.setText(ws.tabs[0], '{"v":1}\n{"edited":true}', { markDirty: true });
+const dirtyReuse = WS.openPath(ws, {
+  filePath: "/tmp/d.jsonl",
+  fileName: "d.jsonl",
+  rawText: '{"v":9}',
+});
+assertEqual(dirtyReuse.reused, true, "dirty reuse flag");
+assertEqual(dirtyReuse.refreshed, false, "dirty not refreshed");
+assertEqual(ws.tabs[0].rawText, '{"v":1}\n{"edited":true}', "dirty text kept for caller");
+
 if (failed) process.exit(1);
 console.log("\nall passed");

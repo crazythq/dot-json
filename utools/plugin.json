@@ -32,7 +32,7 @@
           "type": "files",
           "label": "用 DotJSON 打开",
           "fileType": "file",
-          "extensions": ["json", "JSON"],
+          "extensions": ["json", "JSON", "jsonl", "JSONL"],
           "minLength": 1,
           "maxLength": 20
         }

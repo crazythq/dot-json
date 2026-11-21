@@ -3,7 +3,9 @@
 
   const core = window.DotJSONCore;
   const Diff = window.DotJSONDiff;
+  const JSONL = window.DotJSONL;
   const Doc = window.DotJSONDocument;
+  const Pref = window.DotJSONPreferences;
   const WS = window.DotJSONWorkspace;
   const py = window.DotJSONPython;
   const treeEdit = window.DotJSONTreeEdit;
@@ -11,6 +13,7 @@
 
   let ws = WS.create();
   WS.ensureTab(ws);
+  let prefs = Pref.create({});
   let sessionWriteTimer = null;
   let pluginReady = false;
   let pendingPluginEnter = null;
@@ -39,6 +42,11 @@
     diffLeftText: document.getElementById("diff-left-text"),
     diffRightText: document.getElementById("diff-right-text"),
     diffRows: document.getElementById("diff-rows"),
+    jsonlBar: document.getElementById("jsonl-bar"),
+    jsonlPos: document.getElementById("jsonl-pos"),
+    jsonlList: document.getElementById("jsonl-list"),
+    settingsPanel: document.getElementById("settings-panel"),
+    settingsDefaultIndent: document.getElementById("settings-default-indent"),
   };
 
   const state = {
@@ -73,8 +81,238 @@
   function flushEditorToActiveDoc() {
     const doc = activeDoc();
     if (!doc) return;
-    Doc.setText(doc, els.editor.value, {});
+    if (doc.jsonlMode) {
+      flushJsonlRecordToBuffer();
+      Doc.setText(doc, jsonlFullText(doc), {});
+    } else {
+      Doc.setText(doc, els.editor.value, {});
+    }
     Doc.setIndent(doc, els.indent.value);
+  }
+
+  function loadPreferences() {
+    let stored = null;
+    if (window.utools && utools.dbStorage && typeof utools.dbStorage.getItem === "function") {
+      try {
+        stored = utools.dbStorage.getItem(Pref.STORAGE_KEY_DEFAULT_INDENT);
+      } catch (err) {
+        stored = null;
+      }
+    }
+    prefs = Pref.create({ defaultIndent: stored });
+    const doc = activeDoc();
+    if (doc && WS.isReusableEmpty(doc)) {
+      Pref.applyToNewDoc(doc, prefs);
+      if (els.indent) els.indent.value = prefs.defaultIndent;
+    }
+  }
+
+  function savePreferences() {
+    if (!window.utools || !utools.dbStorage || typeof utools.dbStorage.setItem !== "function") {
+      return;
+    }
+    try {
+      utools.dbStorage.setItem(Pref.STORAGE_KEY_DEFAULT_INDENT, prefs.defaultIndent);
+    } catch (err) {
+      /* ignore */
+    }
+  }
+
+  function jsonlFullText(doc) {
+    if (!doc || !doc.jsonlMode || !Array.isArray(doc.jsonlMode.lines)) return "";
+    return doc.jsonlMode.lines
+      .map(function (line) {
+        return line.rawText;
+      })
+      .join("\n");
+  }
+
+  function syncJsonlDraftToDoc() {
+    const doc = activeDoc();
+    if (!doc || !doc.jsonlMode) return;
+    const mode = doc.jsonlMode;
+    const index = mode.recordIndex;
+    if (index < 0 || index >= mode.lines.length) return;
+    const draft = els.editor.value;
+    mode.lines[index].rawText = draft;
+    try {
+      JSON.parse(draft);
+      mode.lines[index].isValid = true;
+    } catch (_err) {
+      mode.lines[index].isValid = false;
+    }
+    Doc.setText(doc, jsonlFullText(doc), {});
+    Doc.markDirty(doc);
+  }
+
+  function flushJsonlRecordToBuffer() {
+    const doc = activeDoc();
+    if (!doc || !doc.jsonlMode) return;
+    const mode = doc.jsonlMode;
+    const index = mode.recordIndex;
+    if (index < 0 || index >= mode.lines.length) return;
+    let nextText = els.editor.value;
+    const line = mode.lines[index];
+    try {
+      nextText = core.minify(nextText);
+      line.isValid = true;
+    } catch (_err) {
+      line.isValid = false;
+    }
+    if (line.rawText === nextText) {
+      Doc.setText(doc, jsonlFullText(doc), {});
+      return;
+    }
+    line.rawText = nextText;
+    Doc.setText(doc, jsonlFullText(doc), {});
+    Doc.markDirty(doc);
+  }
+
+  function clearJsonlMode(doc) {
+    if (!doc) return;
+    doc.jsonlMode = null;
+    updateJsonlChrome();
+  }
+
+  function renderJsonlList() {
+    if (!els.jsonlList) return;
+    const doc = activeDoc();
+    els.jsonlList.innerHTML = "";
+    if (!doc || !doc.jsonlMode) {
+      els.jsonlList.hidden = true;
+      return;
+    }
+    els.jsonlList.hidden = false;
+    const mode = doc.jsonlMode;
+    mode.lines.forEach(function (line, index) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "jsonl-list-item";
+      if (index === mode.recordIndex) btn.classList.add("is-active");
+      if (!line.isValid) btn.classList.add("is-invalid");
+      const preview = String(line.rawText || "").slice(0, 80);
+      btn.textContent = "#" + (index + 1) + " " + preview;
+      btn.title = line.rawText || "";
+      btn.addEventListener("click", function () {
+        showJsonlRecord(index);
+      });
+      els.jsonlList.appendChild(btn);
+    });
+  }
+
+  function updateJsonlChrome() {
+    const doc = activeDoc();
+    const active = !!(doc && doc.jsonlMode);
+    if (els.jsonlBar) els.jsonlBar.hidden = !active;
+    if (!active) {
+      if (els.jsonlList) els.jsonlList.hidden = true;
+      return;
+    }
+    const mode = doc.jsonlMode;
+    const total = mode.lines.length;
+    const pos = total ? mode.recordIndex + 1 : 0;
+    if (els.jsonlPos) els.jsonlPos.textContent = pos + " / " + total;
+    renderJsonlList();
+  }
+
+  function showJsonlRecord(index, opts) {
+    const options = opts || {};
+    const doc = activeDoc();
+    if (!doc || !doc.jsonlMode) return;
+    const mode = doc.jsonlMode;
+    if (!mode.lines.length) {
+      els.editor.value = "";
+      Doc.setText(doc, "", {});
+      updateJsonlChrome();
+      refreshTree();
+      return;
+    }
+    if (!options.skipFlush) flushJsonlRecordToBuffer();
+    let next = index;
+    if (next < 0) next = 0;
+    if (next >= mode.lines.length) next = mode.lines.length - 1;
+    mode.recordIndex = next;
+    const line = mode.lines[next];
+    let text = line.rawText;
+    if (line.isValid) {
+      try {
+        text = core.format(line.rawText, doc.indentKey || els.indent.value || "fourSpaces");
+      } catch (_err) {
+        text = line.rawText;
+      }
+    }
+    els.editor.value = text;
+    Doc.setText(doc, jsonlFullText(doc), {});
+    updateDirtyMark();
+    updateJsonlChrome();
+    state.expanded = new Set(["0"]);
+    state.selectedId = null;
+    refreshTree();
+    if (!line.isValid) {
+      setStatus("第 " + (next + 1) + " 条记录不是合法 JSON", "error");
+    } else if (!options.silent) {
+      setStatus("JSONL " + (next + 1) + " / " + mode.lines.length, "ok");
+    }
+  }
+
+  function enterJsonlMode(rawFull, opts) {
+    const options = opts || {};
+    if (!JSONL || typeof JSONL.parse !== "function") {
+      setStatus("JSONL 模块未加载", "error");
+      return false;
+    }
+    const doc = activeDoc();
+    if (!doc) return false;
+    const parsed = JSONL.parse(rawFull == null ? "" : String(rawFull));
+    let recordIndex = typeof options.recordIndex === "number" ? options.recordIndex : 0;
+    if (recordIndex < 0) recordIndex = 0;
+    if (parsed.lines.length && recordIndex >= parsed.lines.length) {
+      recordIndex = parsed.lines.length - 1;
+    }
+    doc.jsonlMode = {
+      lines: parsed.lines.map(function (line) {
+        return {
+          index: line.index,
+          rawText: line.rawText,
+          byteOffset: line.byteOffset,
+          isValid: line.isValid,
+        };
+      }),
+      recordIndex: recordIndex,
+    };
+    Doc.setText(doc, jsonlFullText(doc), {});
+    if (options.markSaved) Doc.markSaved(doc);
+    showJsonlRecord(recordIndex, { skipFlush: true, silent: options.silent });
+    return true;
+  }
+
+  function exitJsonlMode(opts) {
+    const options = opts || {};
+    const doc = activeDoc();
+    if (!doc || !doc.jsonlMode) return;
+    flushJsonlRecordToBuffer();
+    const full = jsonlFullText(doc);
+    doc.jsonlMode = null;
+    Doc.setText(doc, full, { markDirty: !options.markSaved });
+    if (options.markSaved) Doc.markSaved(doc);
+    els.editor.value = full;
+    updateJsonlChrome();
+    updateDirtyMark();
+    refreshTree();
+    if (!options.silent) setStatus("已退出 JSONL 浏览", "ok");
+  }
+
+  function openSettingsPanel() {
+    if (!els.settingsPanel) return;
+    if (els.settingsDefaultIndent) {
+      els.settingsDefaultIndent.value = prefs.defaultIndent;
+    }
+    els.settingsPanel.hidden = false;
+  }
+
+  function closeSettingsPanel() {
+    if (!els.settingsPanel) return;
+    els.settingsPanel.hidden = true;
   }
 
   function persistSession() {
@@ -176,28 +414,15 @@
       return;
     }
     try {
-      const content = services.readTextFile(filePath);
       const fileName = filePath.split(/[/\\]/).pop();
       flushEditorToActiveDoc();
-      let rawText = content;
-      try {
-        rawText = core.format(content, els.indent.value);
-      } catch (err) {
-        rawText = content;
-      }
-      const result = WS.openPath(ws, {
-        filePath,
-        fileName,
-        rawText,
-        indentKey: els.indent.value,
-      });
+      const result = openFileIntoWorkspace(filePath, fileName);
       if (!result.ok) {
         setStatus(result.error === "max tabs" ? "标签已达上限（20）" : "打开失败", "error");
         return;
       }
       bindActiveDocToEditor();
       syncDiffPanelAfterTabsChange();
-      rememberRecent(filePath);
       schedulePersistSession();
       setStatus(`已打开 ${fileName}`, "ok");
     } catch (err) {
@@ -225,6 +450,7 @@
       WS.ensureTab(ws);
     }
     loadRecentFromDb();
+    loadPreferences();
     bindActiveDocToEditor();
     pluginReady = true;
     if (pendingPluginEnter) {
@@ -253,7 +479,6 @@
   function bindActiveDocToEditor() {
     const doc = activeDoc();
     if (!doc) return;
-    els.editor.value = doc.rawText == null ? "" : String(doc.rawText);
     els.indent.value = doc.indentKey || "fourSpaces";
     state.expanded = new Set(["0"]);
     state.selectedId = null;
@@ -263,9 +488,15 @@
     state.editorMatchIndex = -1;
     syncFileLabel();
     updateDirtyMark();
+    if (doc.jsonlMode) {
+      showJsonlRecord(doc.jsonlMode.recordIndex || 0, { skipFlush: true, silent: true });
+    } else {
+      els.editor.value = doc.rawText == null ? "" : String(doc.rawText);
+      updateJsonlChrome();
+      refreshTree();
+    }
     if (els.editorSearch.value) applyEditorSearch(els.editorSearch.value, { silent: true });
     else updateEditorSearchCount();
-    refreshTree();
     renderTabs();
   }
 
@@ -314,6 +545,8 @@
       setStatus("标签已达上限（20）", "error");
       return;
     }
+    Pref.applyToNewDoc(WS.activeDoc(ws), prefs);
+    els.indent.value = prefs.defaultIndent;
     bindActiveDocToEditor();
     syncDiffPanelAfterTabsChange();
     schedulePersistSession();
@@ -442,7 +675,26 @@
     const value = text == null ? "" : String(text);
     const doc = activeDoc();
     els.editor.value = value;
-    if (doc) Doc.setText(doc, value, { markDirty: false });
+    if (doc && doc.jsonlMode && options.clearFile) {
+      clearJsonlMode(doc);
+      Doc.setText(doc, value, { markDirty: false });
+    } else if (doc && doc.jsonlMode) {
+      const mode = doc.jsonlMode;
+      const index = mode.recordIndex;
+      if (index >= 0 && index < mode.lines.length) {
+        let stored = value;
+        try {
+          stored = core.minify(value);
+          mode.lines[index].isValid = true;
+        } catch (_err) {
+          mode.lines[index].isValid = false;
+        }
+        mode.lines[index].rawText = stored;
+      }
+      Doc.setText(doc, jsonlFullText(doc), { markDirty: false });
+    } else if (doc) {
+      Doc.setText(doc, value, { markDirty: false });
+    }
     if (options.filePath && doc) {
       Doc.setFile(doc, {
         filePath: options.filePath,
@@ -456,6 +708,7 @@
     if ((options.filePath || options.clearFile) && doc) {
       Doc.markSaved(doc);
     }
+    updateJsonlChrome();
     updateDirtyMark();
     scheduleParse(options.immediate);
   }
@@ -840,7 +1093,8 @@
   // —— events ——
   els.editor.addEventListener("input", () => {
     const doc = activeDoc();
-    if (doc) Doc.setText(doc, els.editor.value, { markDirty: true });
+    if (doc && doc.jsonlMode) syncJsonlDraftToDoc();
+    else if (doc) Doc.setText(doc, els.editor.value, { markDirty: true });
     updateDirtyMark();
     scheduleParse(false);
     schedulePersistSession();
@@ -887,14 +1141,15 @@
   document.getElementById("btn-clear").addEventListener("click", () => {
     flushEditorToActiveDoc();
     const doc = activeDoc();
-    const hasContent = !!(doc && (doc.isDirty || doc.filePath || (doc.rawText && String(doc.rawText).trim())));
+    const hasContent = !!(doc && (doc.isDirty || doc.filePath || (doc.rawText && String(doc.rawText).trim()) || doc.jsonlMode));
     if (hasContent && !window.confirm("确定清空当前内容？已关联的文件路径也会解除。")) return;
+    if (doc && doc.jsonlMode) clearJsonlMode(doc);
     setEditorText("", { clearFile: true, immediate: true });
     setStatus("已清空");
   });
   document.getElementById("btn-paste").addEventListener("click", pasteAndFormat);
   document.getElementById("btn-copy").addEventListener("click", () => {
-    copyText(els.editor.value);
+    copyText(activeSaveText());
     setStatus("已复制全文", "ok");
   });
 
@@ -1103,6 +1358,10 @@
   function writeDiffValueToTab(tabIndex, value) {
     if (tabIndex < 0 || tabIndex >= ws.tabs.length) return "";
     const doc = ws.tabs[tabIndex];
+    if (doc && doc.jsonlMode) {
+      doc.jsonlMode = null;
+      if (tabIndex === ws.activeIndex) updateJsonlChrome();
+    }
     const indentKey = (doc && doc.indentKey) || els.indent.value || "fourSpaces";
     const text = core.format(JSON.stringify(value), indentKey);
     Doc.setText(doc, text, { markDirty: true });
@@ -1254,14 +1513,45 @@
     });
   }
 
-  function isJsonFileName(name) {
+  function isAllowedOpenName(name) {
     if (!name) return false;
     const lower = String(name).toLowerCase();
-    return lower.endsWith(".json");
+    return lower.endsWith(".json") || lower.endsWith(".jsonl");
+  }
+
+  function isJsonlFileName(name) {
+    if (!name) return false;
+    return String(name).toLowerCase().endsWith(".jsonl");
   }
 
   function openFileIntoWorkspace(filePath, fileName) {
     const content = services.readTextFile(filePath);
+    const resolvedName = fileName || filePath.split(/[/\\]/).pop();
+    if (isJsonlFileName(resolvedName)) {
+      const result = WS.openPath(ws, {
+        filePath,
+        fileName: resolvedName,
+        rawText: content,
+        indentKey: els.indent.value,
+      });
+      if (!result.ok) return result;
+      const doc = WS.activeDoc(ws);
+      if (result.reused && !result.refreshed) {
+        if (doc && !doc.jsonlMode) {
+          const wasDirty = !!doc.isDirty;
+          enterJsonlMode(doc.rawText == null ? "" : String(doc.rawText), {
+            markSaved: !wasDirty,
+            silent: true,
+            recordIndex: 0,
+          });
+          if (wasDirty) Doc.markDirty(doc);
+        }
+      } else {
+        enterJsonlMode(content, { markSaved: true, silent: true });
+      }
+      rememberRecent(filePath);
+      return result;
+    }
     let rawText = content;
     try {
       rawText = core.format(content, els.indent.value);
@@ -1270,11 +1560,13 @@
     }
     const result = WS.openPath(ws, {
       filePath,
-      fileName: fileName || filePath.split(/[/\\]/).pop(),
+      fileName: resolvedName,
       rawText,
       indentKey: els.indent.value,
     });
     if (!result.ok) return result;
+    const doc = activeDoc();
+    if (doc) clearJsonlMode(doc);
     rememberRecent(filePath);
     return result;
   }
@@ -1329,10 +1621,10 @@
     }
     try {
       const paths = utools.showOpenDialog({
-        title: "打开 JSON 文件",
+        title: "打开 JSON / JSONL 文件",
         properties: ["openFile", "multiSelections"],
         filters: [
-          { name: "JSON", extensions: ["json"] },
+          { name: "JSON / JSONL", extensions: ["json", "jsonl"] },
           { name: "All Files", extensions: ["*"] },
         ],
       });
@@ -1343,6 +1635,15 @@
     }
   }
 
+  function activeSaveText() {
+    const doc = activeDoc();
+    if (doc && doc.jsonlMode) {
+      flushJsonlRecordToBuffer();
+      return jsonlFullText(doc);
+    }
+    return els.editor.value;
+  }
+
   function saveDocumentAs() {
     const doc = activeDoc();
     if (!window.utools || typeof utools.showSaveDialog !== "function" || !services) {
@@ -1350,18 +1651,21 @@
       return;
     }
     try {
+      const defaultName =
+        (doc && doc.fileName) || (doc && doc.jsonlMode ? "untitled.jsonl" : "untitled.json");
       const saved = utools.showSaveDialog({
         title: "另存为",
-        defaultPath: (doc && doc.fileName) || "untitled.json",
+        defaultPath: defaultName,
         filters: [
-          { name: "JSON", extensions: ["json"] },
+          { name: "JSON / JSONL", extensions: ["json", "jsonl"] },
           { name: "All Files", extensions: ["*"] },
         ],
       });
       if (!saved) return;
-      services.writeTextFile(saved, els.editor.value);
+      const text = activeSaveText();
+      services.writeTextFile(saved, text);
       if (doc) {
-        Doc.setText(doc, els.editor.value, { markDirty: false });
+        Doc.setText(doc, text, { markDirty: false });
         Doc.setFile(doc, {
           filePath: saved,
           fileName: saved.split(/[/\\]/).pop(),
@@ -1385,8 +1689,9 @@
       return;
     }
     try {
-      services.writeTextFile(doc.filePath, els.editor.value);
-      Doc.setText(doc, els.editor.value, { markDirty: false });
+      const text = activeSaveText();
+      services.writeTextFile(doc.filePath, text);
+      Doc.setText(doc, text, { markDirty: false });
       Doc.markSaved(doc);
       rememberRecent(doc.filePath);
       updateDirtyMark();
@@ -1399,22 +1704,26 @@
   function exportJsonViaDialog() {
     const doc = activeDoc();
     if (!window.utools || typeof utools.showSaveDialog !== "function" || !services) {
-      copyText(els.editor.value);
+      copyText(activeSaveText());
       setStatus("已复制（无保存对话框时回退为复制）", "ok");
       return;
     }
     try {
+      const defaultName =
+        (doc && doc.fileName) || (doc && doc.jsonlMode ? "untitled.jsonl" : "untitled.json");
       const saved = utools.showSaveDialog({
         title: "导出 JSON",
-        defaultPath: (doc && doc.fileName) || "untitled.json",
+        defaultPath: defaultName,
         filters: [
-          { name: "JSON", extensions: ["json"] },
+          { name: "JSON / JSONL", extensions: ["json", "jsonl"] },
           { name: "All Files", extensions: ["*"] },
         ],
       });
       if (!saved) return;
-      services.writeTextFile(saved, els.editor.value);
+      const text = activeSaveText();
+      services.writeTextFile(saved, text);
       if (doc) {
+        Doc.setText(doc, text, { markDirty: false });
         Doc.setFile(doc, {
           filePath: saved,
           fileName: saved.split(/[/\\]/).pop(),
@@ -1431,6 +1740,63 @@
   }
 
   document.getElementById("btn-open").addEventListener("click", openJsonViaDialog);
+  document.getElementById("btn-jsonl").addEventListener("click", () => {
+    flushEditorToActiveDoc();
+    const doc = activeDoc();
+    if (!doc) return;
+    if (doc.jsonlMode) {
+      setStatus("已在 JSONL 浏览模式", "ok");
+      updateJsonlChrome();
+      return;
+    }
+    const raw = doc.rawText == null ? els.editor.value : String(doc.rawText);
+    if (!String(raw).trim()) {
+      setStatus("没有可浏览的内容", "error");
+      return;
+    }
+    enterJsonlMode(raw, { silent: false });
+    schedulePersistSession();
+  });
+  const jsonlPrev = document.getElementById("jsonl-prev");
+  const jsonlNext = document.getElementById("jsonl-next");
+  const jsonlExit = document.getElementById("jsonl-exit");
+  if (jsonlPrev) {
+    jsonlPrev.addEventListener("click", () => {
+      const doc = activeDoc();
+      if (!doc || !doc.jsonlMode) return;
+      showJsonlRecord(doc.jsonlMode.recordIndex - 1);
+    });
+  }
+  if (jsonlNext) {
+    jsonlNext.addEventListener("click", () => {
+      const doc = activeDoc();
+      if (!doc || !doc.jsonlMode) return;
+      showJsonlRecord(doc.jsonlMode.recordIndex + 1);
+    });
+  }
+  if (jsonlExit) {
+    jsonlExit.addEventListener("click", () => {
+      exitJsonlMode();
+      schedulePersistSession();
+    });
+  }
+  document.getElementById("btn-settings").addEventListener("click", openSettingsPanel);
+  const settingsClose = document.getElementById("settings-close");
+  if (settingsClose) {
+    settingsClose.addEventListener("click", closeSettingsPanel);
+  }
+  if (els.settingsPanel) {
+    els.settingsPanel.addEventListener("click", (event) => {
+      if (event.target === els.settingsPanel) closeSettingsPanel();
+    });
+  }
+  if (els.settingsDefaultIndent) {
+    els.settingsDefaultIndent.addEventListener("change", () => {
+      prefs = Pref.create({ defaultIndent: els.settingsDefaultIndent.value });
+      savePreferences();
+      setStatus("已更新默认缩进（仅影响新建标签）", "ok");
+    });
+  }
   if (els.btnRecent) {
     els.btnRecent.addEventListener("click", (event) => {
       event.stopPropagation();
@@ -1620,7 +1986,7 @@
         const file = payload[i];
         if (!file || file.isFile !== true) continue;
         const name = file.name || (file.path && String(file.path).split(/[/\\]/).pop()) || "";
-        if (!isJsonFileName(name)) continue;
+        if (!isAllowedOpenName(name)) continue;
         try {
           const result = openFileIntoWorkspace(file.path, name);
           if (!result.ok) {
@@ -1663,20 +2029,24 @@
       const reuseIndex = WS.findReusableEmptyIndex(ws);
       if (reuseIndex >= 0) {
         WS.activate(ws, reuseIndex);
+        Pref.applyToNewDoc(WS.activeDoc(ws), prefs);
       } else {
         const created = WS.newTab(ws);
         if (!created.ok) {
           setStatus("标签已达上限（20）", "error");
           return;
         }
+        Pref.applyToNewDoc(WS.activeDoc(ws), prefs);
       }
+      const indentKey = (WS.activeDoc(ws) && WS.activeDoc(ws).indentKey) || prefs.defaultIndent;
+      els.indent.value = indentKey;
       try {
         let text = payload;
         try {
-          text = core.format(payload, els.indent.value);
+          text = core.format(payload, indentKey);
         } catch (err) {
           try {
-            text = core.format(core.repair(payload), els.indent.value);
+            text = core.format(core.repair(payload), indentKey);
           } catch (err2) {
             text = payload;
           }
@@ -1713,6 +2083,8 @@
     }
   }
 
+  loadPreferences();
+
   // 开发态：无内容时给一个示例，方便浏览器直接打开自检
   if (!window.utools && !els.editor.value) {
     setEditorText('{"hello":"DotJSON","items":[1,true,null]}', { immediate: true });
@@ -1720,4 +2092,5 @@
     bindActiveDocToEditor();
   }
   renderTabs();
+  updateJsonlChrome();
 })();

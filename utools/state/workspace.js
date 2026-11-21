@@ -92,6 +92,26 @@
     return -1;
   }
 
+  function cloneJsonlMode(mode) {
+    if (!mode || !Array.isArray(mode.lines)) return null;
+    let recordIndex = typeof mode.recordIndex === "number" ? mode.recordIndex : 0;
+    if (recordIndex < 0) recordIndex = 0;
+    if (mode.lines.length && recordIndex >= mode.lines.length) {
+      recordIndex = mode.lines.length - 1;
+    }
+    return {
+      recordIndex: recordIndex,
+      lines: mode.lines.map(function (line) {
+        return {
+          index: line.index,
+          rawText: line.rawText == null ? "" : String(line.rawText),
+          byteOffset: typeof line.byteOffset === "number" ? line.byteOffset : 0,
+          isValid: !!line.isValid,
+        };
+      }),
+    };
+  }
+
   function cloneDoc(src) {
     const doc = Doc().create();
     doc.title = src.title || "";
@@ -100,6 +120,7 @@
     doc.fileName = src.fileName == null ? "" : String(src.fileName);
     doc.indentKey = src.indentKey || "fourSpaces";
     doc.isDirty = !!src.isDirty;
+    doc.jsonlMode = cloneJsonlMode(src.jsonlMode);
     return doc;
   }
 
@@ -160,7 +181,8 @@
     if (info && info.indentKey) Doc().setIndent(doc, info.indentKey);
     doc.title = "";
     Doc().markSaved(doc);
-    return { ok: true, reused: reuseIndex >= 0, refreshed: false };
+    // reused 仅表示「同路径标签去重」；占用空 Untitled / newTab 不算 reused
+    return { ok: true, reused: false, refreshed: false };
   }
 
   function addRecent(ws, filePath) {
@@ -183,7 +205,7 @@
       activeIndex: ws.activeIndex,
       nextUntitled: ws.nextUntitled,
       tabs: ws.tabs.map(function (t) {
-        return {
+        const row = {
           rawText: t.rawText,
           filePath: t.filePath,
           fileName: t.fileName,
@@ -191,6 +213,9 @@
           isDirty: !!t.isDirty,
           title: t.title || "",
         };
+        const mode = cloneJsonlMode(t.jsonlMode);
+        if (mode) row.jsonlMode = mode;
+        return row;
       }),
     };
   }
@@ -220,6 +245,7 @@
       doc.fileName = src.fileName == null ? "" : String(src.fileName);
       doc.indentKey = src.indentKey || "fourSpaces";
       doc.isDirty = !!src.isDirty;
+      doc.jsonlMode = cloneJsonlMode(src.jsonlMode);
       ws.tabs.push(doc);
     }
     if (!ws.tabs.length) {
