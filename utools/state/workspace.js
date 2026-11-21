@@ -64,6 +64,34 @@
     return { ok: true };
   }
 
+  function closeOthers(ws, keepIndex) {
+    if (keepIndex < 0 || keepIndex >= ws.tabs.length) return { ok: false };
+    const keep = ws.tabs[keepIndex];
+    ws.tabs = [keep];
+    ws.activeIndex = 0;
+    return { ok: true };
+  }
+
+  function isReusableEmpty(doc) {
+    if (!doc) return false;
+    if (doc.filePath) return false;
+    if (doc.isDirty) return false;
+    const text = doc.rawText == null ? "" : String(doc.rawText);
+    return !text.trim();
+  }
+
+  function findReusableEmptyIndex(ws) {
+    if (!ws.tabs.length) return -1;
+    const active = ws.activeIndex;
+    if (active >= 0 && active < ws.tabs.length && isReusableEmpty(ws.tabs[active])) {
+      return active;
+    }
+    for (let i = 0; i < ws.tabs.length; i += 1) {
+      if (isReusableEmpty(ws.tabs[i])) return i;
+    }
+    return -1;
+  }
+
   function cloneDoc(src) {
     const doc = Doc().create();
     doc.title = src.title || "";
@@ -102,15 +130,27 @@
       for (let i = 0; i < ws.tabs.length; i += 1) {
         if (ws.tabs[i].filePath === filePath) {
           ws.activeIndex = i;
-          return { ok: true };
+          const doc = ws.tabs[i];
+          if (!doc.isDirty && info && info.rawText != null) {
+            Doc().setText(doc, info.rawText, {});
+            if (info.indentKey) Doc().setIndent(doc, info.indentKey);
+            Doc().markSaved(doc);
+            return { ok: true, reused: true, refreshed: true };
+          }
+          return { ok: true, reused: true, refreshed: false };
         }
       }
     }
-    if (ws.tabs.length >= MAX_TABS) {
-      return { ok: false, error: "max tabs" };
+    const reuseIndex = findReusableEmptyIndex(ws);
+    if (reuseIndex >= 0) {
+      ws.activeIndex = reuseIndex;
+    } else {
+      if (ws.tabs.length >= MAX_TABS) {
+        return { ok: false, error: "max tabs" };
+      }
+      const result = newTab(ws);
+      if (!result.ok) return result;
     }
-    const result = newTab(ws);
-    if (!result.ok) return result;
     const doc = activeDoc(ws);
     Doc().setText(doc, info && info.rawText != null ? info.rawText : "", {});
     Doc().setFile(doc, {
@@ -120,7 +160,7 @@
     if (info && info.indentKey) Doc().setIndent(doc, info.indentKey);
     doc.title = "";
     Doc().markSaved(doc);
-    return { ok: true };
+    return { ok: true, reused: reuseIndex >= 0, refreshed: false };
   }
 
   function addRecent(ws, filePath) {
@@ -202,9 +242,12 @@
     activate,
     activeDoc,
     closeTab,
+    closeOthers,
     duplicateTab,
     renameTab,
     openPath,
+    isReusableEmpty,
+    findReusableEmptyIndex,
     addRecent,
     clearRecent,
     toSnapshot,

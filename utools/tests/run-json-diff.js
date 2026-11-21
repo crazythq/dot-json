@@ -80,5 +80,27 @@ const appliedAddZero = D.apply(
 );
 assertEqual(appliedAddZero.right, {}, "apply add numeric object key toRight");
 
+const cmpDotKey = D.compare('{"a.b":1}', "{}");
+const removeDot = cmpDotKey.rows.find((r) => r.path === "a.b" && r.kind === "remove");
+assert(!!removeDot, "dotted object key remove row");
+assertEqual(
+  removeDot && removeDot.pathParts,
+  [{ type: "key", value: "a.b" }],
+  "dotted object key pathParts"
+);
+const appliedDot = D.apply(removeDot, "toLeft", cmpDotKey.leftRoot, cmpDotKey.rightRoot);
+assertEqual(appliedDot.left, {}, "apply remove dotted object key toLeft");
+
+let noPartsThrew = false;
+try {
+  D.apply({ kind: "remove", path: "0" }, "toLeft", { "0": 1 }, {});
+} catch (_e) {
+  noPartsThrew = true;
+}
+assert(noPartsThrew, "apply without pathParts throws");
+
+const shrinkAll = D.applyAll(c3.rows, "toLeft", c3.leftRoot, c3.rightRoot).left;
+assertEqual(shrinkAll, { items: [9] }, "applyAll shrink array ordered");
+
 if (failed) process.exit(1);
 console.log("\nall passed");

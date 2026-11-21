@@ -12,6 +12,8 @@
   let ws = WS.create();
   WS.ensureTab(ws);
   let sessionWriteTimer = null;
+  let pluginReady = false;
+  let pendingPluginEnter = null;
   const RECENT_KEY = "dotjson.recentFiles";
 
   const els = {
@@ -194,6 +196,7 @@
         return;
       }
       bindActiveDocToEditor();
+      syncDiffPanelAfterTabsChange();
       rememberRecent(filePath);
       schedulePersistSession();
       setStatus(`已打开 ${fileName}`, "ok");
@@ -223,6 +226,28 @@
     }
     loadRecentFromDb();
     bindActiveDocToEditor();
+    pluginReady = true;
+    if (pendingPluginEnter) {
+      const action = pendingPluginEnter;
+      pendingPluginEnter = null;
+      handlePluginEnter(action);
+    }
+  }
+
+  function onPluginEnter(action) {
+    if (!pluginReady) {
+      pendingPluginEnter = action;
+      return;
+    }
+    handlePluginEnter(action);
+  }
+
+  function confirmDiscardDirtyDocs(docs, message) {
+    const dirty = (docs || []).filter(function (doc) {
+      return doc && doc.isDirty;
+    });
+    if (!dirty.length) return true;
+    return window.confirm(message || "有未保存的更改，确定丢弃？");
   }
 
   function bindActiveDocToEditor() {
@@ -290,6 +315,7 @@
       return;
     }
     bindActiveDocToEditor();
+    syncDiffPanelAfterTabsChange();
     schedulePersistSession();
     setStatus("已新建标签", "ok");
   }
@@ -305,14 +331,18 @@
     WS.renameTab(ws, index, trimmed);
     renderTabs();
     if (index === ws.activeIndex) syncFileLabel();
+    syncDiffPanelAfterTabsChange();
     schedulePersistSession();
   }
 
   function closeTabAt(index) {
     if (index < 0 || index >= ws.tabs.length) return;
     flushEditorToActiveDoc();
+    const doc = ws.tabs[index];
+    if (!confirmDiscardDirtyDocs([doc], "该标签有未保存的更改，确定关闭？")) return;
     WS.closeTab(ws, index);
     bindActiveDocToEditor();
+    syncDiffPanelAfterTabsChange();
     schedulePersistSession();
   }
 
@@ -325,6 +355,7 @@
       return;
     }
     bindActiveDocToEditor();
+    syncDiffPanelAfterTabsChange();
     schedulePersistSession();
     setStatus("已复制标签", "ok");
   }
@@ -332,10 +363,13 @@
   function closeOtherTabs(keepIndex) {
     if (keepIndex < 0 || keepIndex >= ws.tabs.length) return;
     flushEditorToActiveDoc();
-    const keep = ws.tabs[keepIndex];
-    ws.tabs = [keep];
-    ws.activeIndex = 0;
+    const others = ws.tabs.filter(function (_doc, i) {
+      return i !== keepIndex;
+    });
+    if (!confirmDiscardDirtyDocs(others, "其他标签中有未保存的更改，确定全部关闭？")) return;
+    WS.closeOthers(ws, keepIndex);
     bindActiveDocToEditor();
+    syncDiffPanelAfterTabsChange();
     schedulePersistSession();
     setStatus("已关闭其他标签", "ok");
   }
@@ -809,6 +843,7 @@
     if (doc) Doc.setText(doc, els.editor.value, { markDirty: true });
     updateDirtyMark();
     scheduleParse(false);
+    schedulePersistSession();
     if (els.editorSearch.value) applyEditorSearch(els.editorSearch.value, { silent: true });
   });
 
@@ -850,6 +885,10 @@
   document.getElementById("btn-to-python").addEventListener("click", toPythonEditor);
   document.getElementById("btn-to-json").addEventListener("click", toJSONEditor);
   document.getElementById("btn-clear").addEventListener("click", () => {
+    flushEditorToActiveDoc();
+    const doc = activeDoc();
+    const hasContent = !!(doc && (doc.isDirty || doc.filePath || (doc.rawText && String(doc.rawText).trim())));
+    if (hasContent && !window.confirm("确定清空当前内容？已关联的文件路径也会解除。")) return;
     setEditorText("", { clearFile: true, immediate: true });
     setStatus("已清空");
   });
@@ -870,20 +909,35 @@
     }
   }
 
-  function parseDiffSelectIndex(selectEl) {
-    if (!selectEl) return -1;
-    const raw = selectEl.value;
-    if (raw === "" || raw == null) return -1;
-    const index = Number(raw);
-    return Number.isInteger(index) ? index : -1;
+  function tabIndexById(docId) {
+    if (!docId) return -1;
+    for (let i = 0; i < ws.tabs.length; i += 1) {
+      if (ws.tabs[i].id === docId) return i;
+    }
+    return -1;
   }
 
-  function fillDiffTabSelects(preferredLeft, preferredRight) {
+  function parseDiffSelectId(selectEl) {
+    if (!selectEl) return "";
+    const raw = selectEl.value;
+    return raw == null ? "" : String(raw);
+  }
+
+  function parseDiffSelectIndex(selectEl) {
+    return tabIndexById(parseDiffSelectId(selectEl));
+  }
+
+  function fillDiffTabSelects(preferredLeftId, preferredRightId) {
     if (!els.diffLeftSelect || !els.diffRightSelect) return;
-    const leftKeep = preferredLeft != null ? preferredLeft : parseDiffSelectIndex(els.diffLeftSelect);
+    const leftKeep =
+      preferredLeftId != null && preferredLeftId !== ""
+        ? String(preferredLeftId)
+        : parseDiffSelectId(els.diffLeftSelect);
     const rightKeep =
-      preferredRight != null ? preferredRight : parseDiffSelectIndex(els.diffRightSelect);
-    const makeOptions = (selectEl, selectedIndex) => {
+      preferredRightId != null && preferredRightId !== ""
+        ? String(preferredRightId)
+        : parseDiffSelectId(els.diffRightSelect);
+    const makeOptions = (selectEl, selectedId) => {
       selectEl.innerHTML = "";
       const empty = document.createElement("option");
       empty.value = "";
@@ -891,18 +945,38 @@
       selectEl.appendChild(empty);
       ws.tabs.forEach((doc, index) => {
         const opt = document.createElement("option");
-        opt.value = String(index);
+        opt.value = doc.id;
         opt.textContent = tabDisplayName(doc, index);
         selectEl.appendChild(opt);
       });
-      if (selectedIndex >= 0 && selectedIndex < ws.tabs.length) {
-        selectEl.value = String(selectedIndex);
+      if (selectedId && tabIndexById(selectedId) >= 0) {
+        selectEl.value = selectedId;
       } else {
         selectEl.value = "";
       }
     };
     makeOptions(els.diffLeftSelect, leftKeep);
     makeOptions(els.diffRightSelect, rightKeep);
+  }
+
+  function syncDiffPanelAfterTabsChange() {
+    if (!els.diffPanel || els.diffPanel.hidden) return;
+    const leftId = parseDiffSelectId(els.diffLeftSelect);
+    const rightId = parseDiffSelectId(els.diffRightSelect);
+    fillDiffTabSelects(leftId, rightId);
+    const leftIndex = parseDiffSelectIndex(els.diffLeftSelect);
+    const rightIndex = parseDiffSelectIndex(els.diffRightSelect);
+    if (leftIndex < 0 || rightIndex < 0) {
+      state.diffCompare = null;
+      state.diffSelectedPath = null;
+      if (leftIndex < 0 && els.diffLeftText) els.diffLeftText.value = "";
+      if (rightIndex < 0 && els.diffRightText) els.diffRightText.value = "";
+      renderDiffRows();
+      return;
+    }
+    loadDiffSideFromTab("left");
+    loadDiffSideFromTab("right");
+    scheduleDiffCompare();
   }
 
   function loadDiffSideFromTab(side) {
@@ -1089,7 +1163,9 @@
     if (ws.tabs.length >= 2) {
       rightIndex = leftIndex === 0 ? 1 : 0;
     }
-    fillDiffTabSelects(leftIndex, rightIndex);
+    const leftId = ws.tabs[leftIndex] ? ws.tabs[leftIndex].id : "";
+    const rightId = rightIndex >= 0 && ws.tabs[rightIndex] ? ws.tabs[rightIndex].id : "";
+    fillDiffTabSelects(leftId, rightId);
     loadDiffSideFromTab("left");
     loadDiffSideFromTab("right");
     state.diffSelectedPath = null;
@@ -1114,13 +1190,15 @@
   document.getElementById("diff-close").addEventListener("click", closeDiffPanel);
   document.getElementById("diff-left-current").addEventListener("click", () => {
     if (!els.diffLeftSelect) return;
-    els.diffLeftSelect.value = String(ws.activeIndex);
+    const doc = activeDoc();
+    els.diffLeftSelect.value = doc ? doc.id : "";
     loadDiffSideFromTab("left");
     runDiffCompare();
   });
   document.getElementById("diff-right-current").addEventListener("click", () => {
     if (!els.diffRightSelect) return;
-    els.diffRightSelect.value = String(ws.activeIndex);
+    const doc = activeDoc();
+    els.diffRightSelect.value = doc ? doc.id : "";
     loadDiffSideFromTab("right");
     runDiffCompare();
   });
@@ -1228,6 +1306,7 @@
       }
     }
     bindActiveDocToEditor();
+    syncDiffPanelAfterTabsChange();
     schedulePersistSession();
     if (truncated) {
       setStatus(
@@ -1342,6 +1421,7 @@
         });
         Doc.markSaved(doc);
       }
+      rememberRecent(saved);
       syncFileLabel();
       updateDirtyMark();
       setStatus(`已导出 ${doc ? doc.fileName : ""}`, "ok");
@@ -1557,6 +1637,7 @@
         }
       }
       bindActiveDocToEditor();
+      syncDiffPanelAfterTabsChange();
       schedulePersistSession();
       if (truncated) {
         setStatus(
@@ -1579,10 +1660,15 @@
       payload.trim()
     ) {
       flushEditorToActiveDoc();
-      const created = WS.newTab(ws);
-      if (!created.ok) {
-        setStatus("标签已达上限（20）", "error");
-        return;
+      const reuseIndex = WS.findReusableEmptyIndex(ws);
+      if (reuseIndex >= 0) {
+        WS.activate(ws, reuseIndex);
+      } else {
+        const created = WS.newTab(ws);
+        if (!created.ok) {
+          setStatus("标签已达上限（20）", "error");
+          return;
+        }
       }
       try {
         let text = payload;
@@ -1596,10 +1682,12 @@
           }
         }
         setEditorText(text, { clearFile: true, immediate: true });
+        syncDiffPanelAfterTabsChange();
         schedulePersistSession();
         setStatus("已载入选中文本", "ok");
       } catch (err) {
         setEditorText(payload, { clearFile: true, immediate: true });
+        syncDiffPanelAfterTabsChange();
         schedulePersistSession();
       }
     }
@@ -1608,9 +1696,11 @@
   if (window.utools) {
     if (typeof utools.onPluginReady === "function") {
       utools.onPluginReady(restoreSession);
+    } else {
+      pluginReady = true;
     }
     if (typeof utools.onPluginEnter === "function") {
-      utools.onPluginEnter(handlePluginEnter);
+      utools.onPluginEnter(onPluginEnter);
     }
     if (typeof utools.onPluginOut === "function") {
       utools.onPluginOut(() => {

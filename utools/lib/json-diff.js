@@ -55,16 +55,10 @@
   }
 
   function resolvePathParts(pathOrParts) {
-    if (Array.isArray(pathOrParts)) return pathOrParts;
-    return parsePath(pathOrParts);
-  }
-
-  function parsePath(path) {
-    if (!path) return [];
-    return String(path).split(".").map((segment) => {
-      if (/^\d+$/.test(segment)) return { type: "index", value: Number(segment) };
-      return { type: "key", value: segment };
-    });
+    if (!Array.isArray(pathOrParts)) {
+      throw new Error("pathParts required");
+    }
+    return pathOrParts;
   }
 
   function parseSide(text, side) {
@@ -195,7 +189,10 @@
   }
 
   function rowPathRef(row) {
-    return row.pathParts || row.path;
+    if (!row || !Array.isArray(row.pathParts)) {
+      throw new Error("pathParts required");
+    }
+    return row.pathParts;
   }
 
   function applyRowToTarget(row, targetIsLeft, left, right) {

@@ -5,6 +5,7 @@
 const fs = require("fs");
 const path = require("path");
 const { clipboard } = require("electron");
+const { assertSafeUserPath } = require("./lib/safe-path.js");
 
 const SESSION_FILE = "session-v1.json";
 
@@ -17,11 +18,13 @@ function sessionPath() {
 
 window.services = {
   readTextFile(filePath) {
-    return fs.readFileSync(filePath, "utf8");
+    const safe = assertSafeUserPath(filePath, path);
+    return fs.readFileSync(safe, "utf8");
   },
 
   writeTextFile(filePath, content) {
-    fs.writeFileSync(filePath, content, "utf8");
+    const safe = assertSafeUserPath(filePath, path);
+    fs.writeFileSync(safe, content, "utf8");
   },
 
   readClipboard() {
