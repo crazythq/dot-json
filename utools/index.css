@@ -157,6 +157,25 @@ body {
   max-width: 160px;
 }
 
+.tab-item.is-renaming {
+  max-width: none;
+  cursor: text;
+}
+
+.tab-rename-input {
+  width: 140px;
+  margin: 4px 4px 4px 8px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: #2d2d2d;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.2;
+  padding: 2px 4px;
+  outline: none;
+}
+
 .tab-close {
   appearance: none;
   border: 0;

@@ -59,6 +59,14 @@
     selectedId: null,
     contextNodeId: null,
     tabMenuIndex: -1,
+    renamingIndex: -1,
+    renameDraft: "",
+    renameCursor: null,
+    renameShouldFocus: false,
+    suppressRenameBlur: false,
+    renameCancelOnBlur: false,
+    pendingTabActivate: -1,
+    pendingCloseFromRename: false,
     matches: [],
     matchIndex: -1,
     editorMatches: [],
@@ -634,46 +642,201 @@
     renderTabs();
   }
 
+  let renameCommitting = false;
+
   function renderTabs() {
     if (!els.tabList) return;
+    state.suppressRenameBlur = true;
     els.tabList.innerHTML = "";
     ws.tabs.forEach((doc, index) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "tab-item" + (index === ws.activeIndex ? " is-active" : "");
-      btn.setAttribute("role", "tab");
-      btn.setAttribute("aria-selected", index === ws.activeIndex ? "true" : "false");
-      btn.dataset.index = String(index);
-      const label = tabDisplayName(doc, index);
-      const labelEl = document.createElement("span");
-      labelEl.className = "tab-label";
-      labelEl.textContent = doc.isDirty ? "• " + label : label;
-      labelEl.title = label;
-      const closeBtn = document.createElement("button");
-      closeBtn.type = "button";
-      closeBtn.className = "tab-close";
-      closeBtn.title = "关闭";
-      closeBtn.setAttribute("aria-label", "关闭标签");
-      closeBtn.textContent = "×";
-      closeBtn.addEventListener("click", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        closeTabAt(index);
-      });
-      btn.appendChild(labelEl);
-      btn.appendChild(closeBtn);
-      btn.addEventListener("click", () => switchToTab(index));
-      btn.addEventListener("dblclick", (event) => {
-        if (event.target.closest(".tab-close")) return;
-        event.preventDefault();
-        renameTabAt(index);
-      });
-      btn.addEventListener("contextmenu", (event) => {
+      const renaming = state.renamingIndex === index;
+      const item = document.createElement(renaming ? "div" : "button");
+      if (!renaming) item.type = "button";
+      item.className =
+        "tab-item" +
+        (index === ws.activeIndex ? " is-active" : "") +
+        (renaming ? " is-renaming" : "");
+      item.setAttribute("role", "tab");
+      item.setAttribute("aria-selected", index === ws.activeIndex ? "true" : "false");
+      item.dataset.index = String(index);
+      if (renaming) {
+        item.appendChild(createRenameInput());
+      } else {
+        const label = tabDisplayName(doc, index);
+        const labelEl = document.createElement("span");
+        labelEl.className = "tab-label";
+        labelEl.textContent = doc.isDirty ? "• " + label : label;
+        labelEl.title = label;
+        item.appendChild(labelEl);
+        item.addEventListener("mousedown", (event) => {
+          if (event.button !== 0) return;
+          if (state.renamingIndex >= 0 && state.renamingIndex !== index) {
+            state.pendingTabActivate = index;
+          }
+        });
+        item.addEventListener("click", () => switchToTab(index));
+        item.addEventListener("dblclick", (event) => {
+          if (event.target.closest(".tab-close")) return;
+          event.preventDefault();
+          startRename(index);
+        });
+      }
+      item.appendChild(createTabCloseButton(index));
+      item.addEventListener("contextmenu", (event) => {
         event.preventDefault();
         showTabMenu(event.clientX, event.clientY, index);
       });
-      els.tabList.appendChild(btn);
+      els.tabList.appendChild(item);
     });
+    state.suppressRenameBlur = false;
+    focusRenameInput();
+  }
+
+  function createRenameInput() {
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "tab-rename-input";
+    input.setAttribute("aria-label", "标签名称");
+    input.value = state.renameDraft;
+    input.addEventListener("input", () => {
+      state.renameDraft = input.value;
+      state.renameCursor = input.selectionStart;
+    });
+    input.addEventListener("keyup", () => {
+      state.renameCursor = input.selectionStart;
+    });
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        commitRename();
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        cancelRename();
+      }
+    });
+    input.addEventListener("blur", () => {
+      if (state.suppressRenameBlur || state.renamingIndex < 0) return;
+      if (state.renameCancelOnBlur) {
+        state.renameCancelOnBlur = false;
+        cancelRename();
+        return;
+      }
+      commitRename();
+    });
+    return input;
+  }
+
+  function createTabCloseButton(index) {
+    const closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.className = "tab-close";
+    closeBtn.title = "关闭";
+    closeBtn.setAttribute("aria-label", "关闭标签");
+    closeBtn.textContent = "×";
+    closeBtn.addEventListener("mousedown", (event) => {
+      if (state.renamingIndex !== index) return;
+      event.preventDefault();
+      event.stopPropagation();
+      state.renameCancelOnBlur = true;
+      state.pendingCloseFromRename = true;
+      cancelRename();
+      closeTabAt(index);
+      state.renameCancelOnBlur = false;
+      setTimeout(() => {
+        state.pendingCloseFromRename = false;
+      }, 0);
+    });
+    closeBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (state.pendingCloseFromRename) {
+        state.pendingCloseFromRename = false;
+        state.renameCancelOnBlur = false;
+        return;
+      }
+      if (state.renamingIndex === index) cancelRename();
+      closeTabAt(index);
+    });
+    return closeBtn;
+  }
+
+  function focusRenameInput() {
+    if (state.renamingIndex < 0 || !els.tabList) return;
+    const input = els.tabList.querySelector(".tab-rename-input");
+    if (!input) return;
+    state.suppressRenameBlur = true;
+    input.focus();
+    if (state.renameShouldFocus) {
+      input.select();
+      state.renameShouldFocus = false;
+      state.renameCursor = null;
+    } else if (state.renameCursor != null) {
+      const pos = Math.max(0, Math.min(state.renameCursor, input.value.length));
+      input.setSelectionRange(pos, pos);
+    }
+    state.suppressRenameBlur = false;
+  }
+
+  document.addEventListener("mousedown", (event) => {
+    if (state.renamingIndex < 0 || state.suppressRenameBlur || renameCommitting) return;
+    const target = event.target;
+    if (target && target.closest) {
+      const renamingItem = target.closest(".tab-item.is-renaming");
+      if (renamingItem && !target.closest(".tab-close")) return;
+    }
+    commitRename();
+  });
+
+  function startRename(index) {
+    if (index < 0 || index >= ws.tabs.length) return;
+    if (state.renamingIndex === index) {
+      state.renameShouldFocus = true;
+      focusRenameInput();
+      return;
+    }
+    if (state.renamingIndex >= 0) commitRename();
+    const doc = ws.tabs[index];
+    if (!doc) return;
+    state.renamingIndex = index;
+    state.renameDraft = tabDisplayName(doc, index);
+    state.renameCursor = null;
+    state.renameShouldFocus = true;
+    state.pendingTabActivate = -1;
+    renderTabs();
+  }
+
+  function commitRename() {
+    if (state.renamingIndex < 0 || renameCommitting) return;
+    renameCommitting = true;
+    const index = state.renamingIndex;
+    const raw = state.renameDraft;
+    const activate = state.pendingTabActivate;
+    state.renamingIndex = -1;
+    state.renameDraft = "";
+    state.renameCursor = null;
+    state.renameShouldFocus = false;
+    state.pendingTabActivate = -1;
+    state.renameCancelOnBlur = false;
+    if (index >= 0 && index < ws.tabs.length) WS.renameTab(ws, index, raw);
+    renderTabs();
+    if (index === ws.activeIndex) syncFileLabel();
+    syncDiffPanelAfterTabsChange();
+    schedulePersistSession();
+    renameCommitting = false;
+    if (activate >= 0 && activate < ws.tabs.length && activate !== ws.activeIndex) {
+      switchToTab(activate);
+    }
+  }
+
+  function cancelRename() {
+    if (state.renamingIndex < 0) return;
+    state.renamingIndex = -1;
+    state.renameDraft = "";
+    state.renameCursor = null;
+    state.renameShouldFocus = false;
+    state.pendingTabActivate = -1;
+    renderTabs();
   }
 
   function switchToTab(index) {
@@ -708,21 +871,6 @@
     setStatus("已新建标签", "ok");
   }
 
-  function renameTabAt(index) {
-    if (index < 0 || index >= ws.tabs.length) return;
-    const doc = ws.tabs[index];
-    const current = tabDisplayName(doc, index);
-    const next = window.prompt("重命名标签", current);
-    if (next == null) return;
-    const trimmed = String(next).trim();
-    if (!trimmed) return;
-    WS.renameTab(ws, index, trimmed);
-    renderTabs();
-    if (index === ws.activeIndex) syncFileLabel();
-    syncDiffPanelAfterTabsChange();
-    schedulePersistSession();
-  }
-
   function closeTabAt(index) {
     if (index < 0 || index >= ws.tabs.length) return;
     flushEditorToActiveDoc();
@@ -740,13 +888,13 @@
     flushEditorToActiveDoc();
     const result = WS.duplicateTab(ws, index);
     if (!result.ok) {
-      setStatus(result.error === "max tabs" ? "标签已达上限（20）" : "复制失败", "error");
+      setStatus(result.error === "max tabs" ? "标签已达上限（20）" : "创建副本失败", "error");
       return;
     }
     bindActiveDocToEditor();
     syncDiffPanelAfterTabsChange();
     schedulePersistSession();
-    setStatus("已复制标签", "ok");
+    setStatus("已创建副本", "ok");
   }
 
   function closeOtherTabs(keepIndex) {
@@ -1904,7 +2052,8 @@
       const action = item.dataset.action;
       hideTabMenu();
       if (index < 0) return;
-      if (action === "duplicate") duplicateTabAt(index);
+      if (action === "rename") startRename(index);
+      else if (action === "duplicate") duplicateTabAt(index);
       else if (action === "close") closeTabAt(index);
       else if (action === "close-others") closeOtherTabs(index);
     });

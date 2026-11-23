@@ -142,7 +142,7 @@
 
   function renameTab(ws, index, title) {
     if (index < 0 || index >= ws.tabs.length) return;
-    ws.tabs[index].title = title == null ? "" : String(title);
+    ws.tabs[index].title = title == null ? "" : String(title).trim();
   }
 
   function openPath(ws, info) {

@@ -174,5 +174,15 @@ assertEqual(dirtyReuse.reused, true, "dirty reuse flag");
 assertEqual(dirtyReuse.refreshed, false, "dirty not refreshed");
 assertEqual(ws.tabs[0].rawText, '{"v":1}\n{"edited":true}', "dirty text kept for caller");
 
+// renameTab: trim and blank clears custom title
+ws = WS.create();
+WS.ensureTab(ws);
+WS.renameTab(ws, 0, "  配置  ");
+assertEqual(ws.tabs[0].title, "配置", "rename trims");
+WS.renameTab(ws, 0, "   ");
+assertEqual(ws.tabs[0].title, "", "rename blank clears");
+WS.renameTab(ws, 0, "");
+assertEqual(ws.tabs[0].title, "", "rename empty clears");
+
 if (failed) process.exit(1);
 console.log("\nall passed");
