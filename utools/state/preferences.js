@@ -5,6 +5,7 @@
   "use strict";
 
   const STORAGE_KEY_DEFAULT_INDENT = "dotjson.defaultIndent";
+  const STORAGE_KEY_AUTO_FORMAT = "dotjson.autoFormat";
   const ALLOWED = {
     twoSpaces: true,
     fourSpaces: true,
@@ -15,10 +16,18 @@
     return ALLOWED[raw] ? raw : "fourSpaces";
   }
 
+  function normalizeAutoFormat(raw) {
+    if (raw === false || raw === 0 || raw === "0" || raw === "false") return false;
+    return true;
+  }
+
   function create(partial) {
     const src = partial || {};
     return {
       defaultIndent: normalizeIndentKey(src.defaultIndent),
+      autoFormat: normalizeAutoFormat(
+        Object.prototype.hasOwnProperty.call(src, "autoFormat") ? src.autoFormat : true
+      ),
     };
   }
 
@@ -31,7 +40,9 @@
 
   global.DotJSONPreferences = {
     STORAGE_KEY_DEFAULT_INDENT: STORAGE_KEY_DEFAULT_INDENT,
+    STORAGE_KEY_AUTO_FORMAT: STORAGE_KEY_AUTO_FORMAT,
     normalizeIndentKey: normalizeIndentKey,
+    normalizeAutoFormat: normalizeAutoFormat,
     create: create,
     applyToNewDoc: applyToNewDoc,
   };

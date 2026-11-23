@@ -10,8 +10,6 @@
   <div id="app">
     <header class="toolbar" role="toolbar">
       <div class="toolbar-group">
-        <button type="button" id="btn-format" title="格式化 JSON">格式化</button>
-        <button type="button" id="btn-minify" title="压缩 JSON">压缩</button>
         <label class="indent-label" title="缩进">
           缩进
           <select id="indent-select" aria-label="缩进">
@@ -20,7 +18,8 @@
             <option value="tab">Tab</option>
           </select>
         </label>
-        <button type="button" id="btn-repair" title="尝试修复 Python/AI 风格 JSON">修复</button>
+        <button type="button" id="btn-format" title="格式化 JSON（无效时会尝试修复）">格式化</button>
+        <button type="button" id="btn-minify" title="压缩 JSON">压缩</button>
         <button type="button" id="btn-to-python" title="转为 Python 字面量">转 Python</button>
         <button type="button" id="btn-to-json" title="转为标准 JSON">转 JSON</button>
       </div>
@@ -29,7 +28,6 @@
         <button type="button" id="btn-paste" title="从剪贴板粘贴并尝试格式化">粘贴</button>
         <button type="button" id="btn-copy" title="复制全文">复制</button>
         <button type="button" id="btn-diff" title="JSON 对比">对比</button>
-        <button type="button" id="btn-jsonl" title="按 JSONL 浏览当前文本">JSONL</button>
       </div>
       <div class="toolbar-group">
         <button type="button" id="btn-open" title="打开文件">打开</button>
@@ -68,18 +66,30 @@
           </div>
         </div>
         <div id="jsonl-bar" class="jsonl-bar" hidden>
-          <button type="button" id="jsonl-prev" title="上一条">上一条</button>
-          <span id="jsonl-pos" class="jsonl-pos">0 / 0</span>
-          <button type="button" id="jsonl-next" title="下一条">下一条</button>
-          <button type="button" id="jsonl-exit" title="退出 JSONL 浏览">退出浏览</button>
+          <div id="jsonl-browse-controls" class="jsonl-browse-controls">
+            <button type="button" id="jsonl-prev" title="上一条">上一条</button>
+            <span id="jsonl-pos" class="jsonl-pos">0 / 0</span>
+            <button type="button" id="jsonl-next" title="下一条">下一条</button>
+            <button type="button" id="jsonl-exit" title="退出逐条浏览，在编辑器中显示完整 JSONL 文件">整文件编辑</button>
+          </div>
+          <div id="jsonl-full-controls" class="jsonl-full-controls" hidden>
+            <span class="jsonl-full-hint">当前为 JSONL 整文件编辑（多行无法作为单个 JSON 解析）</span>
+            <button type="button" id="jsonl-enter" title="按行进入逐条浏览">逐条浏览</button>
+          </div>
         </div>
-        <textarea
-          id="editor"
-          spellcheck="false"
-          autocomplete="off"
-          autocapitalize="off"
-          placeholder='粘贴或输入 JSON，例如 {"hello": "world"}'
-        ></textarea>
+        <div class="editor-shell">
+          <div id="editor-gutter" class="editor-gutter" aria-hidden="true"></div>
+          <div class="editor-main">
+            <pre id="editor-highlight" class="editor-highlight" aria-hidden="true"></pre>
+            <textarea
+              id="editor"
+              spellcheck="false"
+              autocomplete="off"
+              autocapitalize="off"
+              placeholder='粘贴或输入 JSON，例如 {"hello": "world"}'
+            ></textarea>
+          </div>
+        </div>
       </section>
 
       <div class="splitter" id="splitter" title="拖拽调整宽度"></div>
@@ -99,8 +109,10 @@
             <span id="search-count" class="search-count"></span>
           </div>
         </div>
-        <div id="jsonl-list" class="jsonl-list" hidden></div>
-        <div id="tree" class="tree" tabindex="0"></div>
+        <div id="jsonl-accordion" class="jsonl-accordion" hidden></div>
+        <div id="tree-host" class="tree-host">
+          <div id="tree" class="tree" tabindex="0"></div>
+        </div>
       </section>
     </main>
   </div>
@@ -123,8 +135,11 @@
   <ul id="recent-menu" class="context-menu recent-menu" hidden></ul>
 
   <div id="settings-panel" class="settings-panel" hidden>
-    <div class="settings-card" role="dialog" aria-label="设置">
-      <h2>设置</h2>
+    <div class="settings-card" role="dialog" aria-label="设置" aria-modal="true">
+      <div class="settings-card-header">
+        <h2>设置</h2>
+        <button type="button" id="settings-dismiss" class="settings-dismiss" title="不保存并关闭" aria-label="不保存并关闭">×</button>
+      </div>
       <label class="settings-field">
         默认缩进
         <select id="settings-default-indent" aria-label="默认缩进">
@@ -134,7 +149,14 @@
         </select>
       </label>
       <p class="settings-hint">仅影响新建标签，不改变已打开文档。</p>
-      <button type="button" id="settings-close">关闭</button>
+      <label class="settings-toggle">
+        <input type="checkbox" id="settings-auto-format" checked />
+        <span>自动格式化</span>
+      </label>
+      <p class="settings-hint">开启后，粘贴、打开文件与从 uTools 搜索框载入时会自动格式化内容。</p>
+      <div class="settings-card-footer">
+        <button type="button" id="settings-save-close">保存并关闭</button>
+      </div>
     </div>
   </div>
 

@@ -21,6 +21,11 @@ assertEqual(Pref.normalizeIndentKey(null), "fourSpaces", "null -> four");
 assertEqual(Pref.create({}).defaultIndent, "fourSpaces", "create default");
 assertEqual(Pref.create({ defaultIndent: "tab" }).defaultIndent, "tab", "create tab");
 assertEqual(Pref.STORAGE_KEY_DEFAULT_INDENT, "dotjson.defaultIndent", "storage key");
+assertEqual(Pref.STORAGE_KEY_AUTO_FORMAT, "dotjson.autoFormat", "auto format key");
+assertEqual(Pref.create({}).autoFormat, true, "autoFormat default on");
+assertEqual(Pref.create({ autoFormat: false }).autoFormat, false, "autoFormat off");
+assertEqual(Pref.normalizeAutoFormat("false"), false, "normalize false string");
+assertEqual(Pref.normalizeAutoFormat(true), true, "normalize true");
 
 const ws = WS.create();
 WS.ensureTab(ws);

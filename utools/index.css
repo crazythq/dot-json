@@ -128,14 +128,15 @@ body {
   border-right: 1px solid var(--border);
   background: transparent;
   color: var(--muted);
-  padding: 6px 12px;
+  padding: 0;
   font: inherit;
   cursor: pointer;
   white-space: nowrap;
-  max-width: 180px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  max-width: 200px;
   flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
 }
 
 .tab-item:hover {
@@ -147,6 +148,35 @@ body {
   background: var(--bg);
   color: var(--text);
   box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.tab-label {
+  padding: 6px 4px 6px 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+
+.tab-close {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  width: 22px;
+  height: 22px;
+  margin-right: 4px;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  flex: 0 0 auto;
+  opacity: 0.55;
+}
+
+.tab-close:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .tab-new {
@@ -189,6 +219,19 @@ body {
 .pane-tree {
   flex: 1;
   min-width: 0;
+  min-height: 0;
+}
+
+.tree-host {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tree-host[hidden] {
+  display: none !important;
 }
 
 .pane-tree .tree {
@@ -306,19 +349,83 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-#editor {
+.editor-shell {
+  display: flex;
   flex: 1;
+  min-height: 0;
   width: 100%;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.editor-gutter {
+  flex: 0 0 auto;
+  min-width: 36px;
+  padding: 10px 8px 10px 10px;
+  margin: 0;
+  border-right: 1px solid var(--border);
+  background: #1a1a1a;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: right;
+  white-space: pre;
+  overflow: hidden;
+  user-select: none;
+  box-sizing: border-box;
+}
+
+.editor-main {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.editor-highlight,
+#editor {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  width: 100%;
+  height: 100%;
   resize: none;
   border: 0;
   outline: none;
   padding: 10px 12px;
-  background: var(--bg);
-  color: var(--text);
   font-family: var(--font-mono);
   font-size: 13px;
   line-height: 1.5;
   tab-size: 4;
+  white-space: pre;
+  overflow: auto;
+  box-sizing: border-box;
+}
+
+.editor-highlight {
+  z-index: 0;
+  background: var(--bg);
+  color: transparent;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.editor-highlight mark {
+  color: transparent;
+  background: rgba(90, 74, 26, 0.85);
+  border-radius: 2px;
+}
+
+.editor-highlight mark.is-active {
+  background: rgba(154, 90, 26, 0.95);
+}
+
+#editor {
+  z-index: 1;
+  background: transparent;
+  color: var(--text);
+  caret-color: var(--text);
   user-select: text;
 }
 
@@ -669,12 +776,36 @@ body {
   gap: 8px;
   padding: 6px 10px;
   border-bottom: 1px solid var(--border);
-  background: var(--panel);
+  background: #252526;
   flex-shrink: 0;
 }
 
 .jsonl-bar[hidden] {
   display: none !important;
+}
+
+.jsonl-browse-controls,
+.jsonl-full-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.jsonl-browse-controls[hidden],
+.jsonl-full-controls[hidden] {
+  display: none !important;
+}
+
+.jsonl-full-hint {
+  color: var(--muted);
+  font-size: 12px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .jsonl-pos {
@@ -684,45 +815,93 @@ body {
   text-align: center;
 }
 
-.jsonl-list {
-  max-height: 160px;
+.jsonl-accordion {
+  flex: 1;
+  min-height: 0;
   overflow: auto;
-  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
   background: var(--bg);
-  flex-shrink: 0;
-  font-family: var(--mono);
+  font-family: var(--font-mono);
   font-size: 12px;
 }
 
-.jsonl-list[hidden] {
+.jsonl-accordion[hidden] {
   display: none !important;
 }
 
-.jsonl-list-item {
-  display: block;
+.jsonl-acc-item {
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+  min-height: 0;
+}
+
+.jsonl-acc-item.is-open {
+  flex: 1 1 auto;
+}
+
+.jsonl-acc-header {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   width: 100%;
   text-align: left;
   border: 0;
-  border-bottom: 1px solid var(--border);
-  background: transparent;
+  background: #252526;
   color: var(--text);
-  padding: 4px 8px;
+  padding: 6px 10px;
   cursor: pointer;
-  white-space: nowrap;
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.jsonl-acc-header:hover {
+  background: var(--bg-hover);
+}
+
+.jsonl-acc-item.is-open > .jsonl-acc-header {
+  background: #2a2d2e;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.jsonl-acc-header.is-invalid {
+  color: var(--danger);
+}
+
+.jsonl-acc-twistie {
+  flex: 0 0 auto;
+  width: 1em;
+  color: var(--muted);
+}
+
+.jsonl-acc-title {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.jsonl-list-item:hover {
-  background: var(--hover);
+.jsonl-acc-body {
+  display: none;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border-top: 1px solid var(--border);
 }
 
-.jsonl-list-item.is-active {
-  background: var(--selection);
+.jsonl-acc-item.is-open > .jsonl-acc-body {
+  display: flex;
+  flex-direction: column;
 }
 
-.jsonl-list-item.is-invalid {
-  color: var(--danger);
+.jsonl-acc-body .tree {
+  flex: 1;
+  min-height: 120px;
 }
 
 .settings-panel {
@@ -732,7 +911,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, 0.55);
 }
 
 .settings-panel[hidden] {
@@ -741,17 +920,32 @@ body {
 
 .settings-card {
   width: min(360px, calc(100vw - 32px));
-  background: var(--panel);
+  background: #2d2d2d;
+  color: var(--text);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 16px 18px;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+}
+
+.settings-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 
 .settings-card h2 {
-  margin: 0 0 12px;
+  margin: 0;
   font-size: 16px;
   font-weight: 600;
+}
+
+.settings-card-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
 }
 
 .settings-field {
@@ -764,11 +958,66 @@ body {
 
 .settings-field select {
   max-width: 100%;
+  background: #3c3c3c;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 8px;
+}
+
+.settings-card-footer button {
+  background: #3c3c3c;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.settings-card-footer button:hover {
+  background: #454545;
+}
+
+.settings-card .settings-dismiss {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.settings-card .settings-dismiss:hover {
+  background: var(--bg-hover);
+  color: var(--text);
 }
 
 .settings-hint {
-  margin: 10px 0 14px;
+  margin: 8px 0 14px;
   font-size: 12px;
   color: var(--muted);
   line-height: 1.4;
+}
+
+.settings-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+}
+
+.settings-toggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
 }

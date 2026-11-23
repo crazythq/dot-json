@@ -21,6 +21,8 @@
 
   const els = {
     editor: document.getElementById("editor"),
+    editorHighlight: document.getElementById("editor-highlight"),
+    editorGutter: document.getElementById("editor-gutter"),
     tree: document.getElementById("tree"),
     status: document.getElementById("status"),
     fileLabel: document.getElementById("file-label"),
@@ -44,9 +46,11 @@
     diffRows: document.getElementById("diff-rows"),
     jsonlBar: document.getElementById("jsonl-bar"),
     jsonlPos: document.getElementById("jsonl-pos"),
-    jsonlList: document.getElementById("jsonl-list"),
+    jsonlAccordion: document.getElementById("jsonl-accordion"),
+    treeHost: document.getElementById("tree-host"),
     settingsPanel: document.getElementById("settings-panel"),
     settingsDefaultIndent: document.getElementById("settings-default-indent"),
+    settingsAutoFormat: document.getElementById("settings-auto-format"),
   };
 
   const state = {
@@ -61,8 +65,9 @@
     editorMatchIndex: -1,
     searchTimer: null,
     editorSearchTimer: null,
+    editorSearchApplied: "",
+    treeSearchApplied: "",
     parseTimer: null,
-    lastParseOk: true,
     diffCompare: null,
     diffSelectedPath: null,
     diffCompareTimer: null,
@@ -91,15 +96,25 @@
   }
 
   function loadPreferences() {
-    let stored = null;
+    let storedIndent = null;
+    let storedAutoFormat = true;
     if (window.utools && utools.dbStorage && typeof utools.dbStorage.getItem === "function") {
       try {
-        stored = utools.dbStorage.getItem(Pref.STORAGE_KEY_DEFAULT_INDENT);
+        storedIndent = utools.dbStorage.getItem(Pref.STORAGE_KEY_DEFAULT_INDENT);
       } catch (err) {
-        stored = null;
+        storedIndent = null;
+      }
+      try {
+        const rawAuto = utools.dbStorage.getItem(Pref.STORAGE_KEY_AUTO_FORMAT);
+        if (rawAuto !== null && rawAuto !== undefined) storedAutoFormat = rawAuto;
+      } catch (err) {
+        storedAutoFormat = true;
       }
     }
-    prefs = Pref.create({ defaultIndent: stored });
+    prefs = Pref.create({
+      defaultIndent: storedIndent,
+      autoFormat: storedAutoFormat,
+    });
     const doc = activeDoc();
     if (doc && WS.isReusableEmpty(doc)) {
       Pref.applyToNewDoc(doc, prefs);
@@ -113,6 +128,7 @@
     }
     try {
       utools.dbStorage.setItem(Pref.STORAGE_KEY_DEFAULT_INDENT, prefs.defaultIndent);
+      utools.dbStorage.setItem(Pref.STORAGE_KEY_AUTO_FORMAT, !!prefs.autoFormat);
     } catch (err) {
       /* ignore */
     }
@@ -174,38 +190,98 @@
     updateJsonlChrome();
   }
 
+  function ensureTreeInHost() {
+    if (!els.tree || !els.treeHost) return;
+    if (els.tree.parentElement !== els.treeHost) {
+      els.treeHost.appendChild(els.tree);
+    }
+    els.treeHost.hidden = false;
+    if (els.jsonlAccordion) els.jsonlAccordion.hidden = true;
+  }
+
   function renderJsonlList() {
-    if (!els.jsonlList) return;
+    if (!els.jsonlAccordion) return;
     const doc = activeDoc();
-    els.jsonlList.innerHTML = "";
+    if (els.tree && els.treeHost && els.tree.parentElement !== els.treeHost) {
+      els.treeHost.appendChild(els.tree);
+    }
+    els.jsonlAccordion.innerHTML = "";
     if (!doc || !doc.jsonlMode) {
-      els.jsonlList.hidden = true;
+      ensureTreeInHost();
       return;
     }
-    els.jsonlList.hidden = false;
+    els.jsonlAccordion.hidden = false;
+    if (els.treeHost) els.treeHost.hidden = true;
     const mode = doc.jsonlMode;
+    if (!mode.lines.length) {
+      if (els.tree) els.jsonlAccordion.appendChild(els.tree);
+      return;
+    }
     mode.lines.forEach(function (line, index) {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "jsonl-list-item";
-      if (index === mode.recordIndex) btn.classList.add("is-active");
-      if (!line.isValid) btn.classList.add("is-invalid");
-      const preview = String(line.rawText || "").slice(0, 80);
-      btn.textContent = "#" + (index + 1) + " " + preview;
-      btn.title = line.rawText || "";
-      btn.addEventListener("click", function () {
+      const open = index === mode.recordIndex;
+      const item = document.createElement("div");
+      item.className = "jsonl-acc-item" + (open ? " is-open" : "");
+      item.dataset.index = String(index);
+
+      const header = document.createElement("button");
+      header.type = "button";
+      header.className = "jsonl-acc-header" + (line.isValid ? "" : " is-invalid");
+      header.title = line.rawText || "";
+
+      const twistie = document.createElement("span");
+      twistie.className = "jsonl-acc-twistie";
+      twistie.textContent = open ? "▾" : "▸";
+
+      const title = document.createElement("span");
+      title.className = "jsonl-acc-title";
+      title.textContent = "#" + (index + 1) + " " + String(line.rawText || "").slice(0, 100);
+
+      header.appendChild(twistie);
+      header.appendChild(title);
+      header.addEventListener("click", function () {
+        if (index === mode.recordIndex) return;
         showJsonlRecord(index);
       });
-      els.jsonlList.appendChild(btn);
+
+      const body = document.createElement("div");
+      body.className = "jsonl-acc-body";
+      if (open && els.tree) {
+        body.appendChild(els.tree);
+      }
+
+      item.appendChild(header);
+      item.appendChild(body);
+      els.jsonlAccordion.appendChild(item);
     });
+  }
+
+  function currentEditorOrDocText(doc) {
+    if (doc && doc.jsonlMode) return jsonlFullText(doc);
+    if (els.editor && document.activeElement === els.editor) {
+      return els.editor.value == null ? "" : String(els.editor.value);
+    }
+    if (doc && doc.rawText != null) return String(doc.rawText);
+    return els.editor ? String(els.editor.value || "") : "";
+  }
+
+  function isJsonlContext(doc) {
+    if (!doc) return false;
+    if (doc.jsonlMode) return true;
+    if (isJsonlFileName(doc.fileName) || isJsonlFileName(doc.filePath)) return true;
+    return looksLikeJsonl(currentEditorOrDocText(doc));
   }
 
   function updateJsonlChrome() {
     const doc = activeDoc();
-    const active = !!(doc && doc.jsonlMode);
-    if (els.jsonlBar) els.jsonlBar.hidden = !active;
-    if (!active) {
-      if (els.jsonlList) els.jsonlList.hidden = true;
+    const browsing = !!(doc && doc.jsonlMode);
+    const showBar = browsing || isJsonlContext(doc);
+    const browseControls = document.getElementById("jsonl-browse-controls");
+    const fullControls = document.getElementById("jsonl-full-controls");
+    if (els.jsonlBar) els.jsonlBar.hidden = !showBar;
+    if (browseControls) browseControls.hidden = !browsing;
+    if (fullControls) fullControls.hidden = browsing || !showBar;
+    if (!browsing) {
+      ensureTreeInHost();
       return;
     }
     const mode = doc.jsonlMode;
@@ -223,6 +299,7 @@
     if (!mode.lines.length) {
       els.editor.value = "";
       Doc.setText(doc, "", {});
+      updateEditorLineNumbers();
       updateJsonlChrome();
       refreshTree();
       return;
@@ -244,6 +321,7 @@
     els.editor.value = text;
     Doc.setText(doc, jsonlFullText(doc), {});
     updateDirtyMark();
+    updateEditorLineNumbers();
     updateJsonlChrome();
     state.expanded = new Set(["0"]);
     state.selectedId = null;
@@ -296,10 +374,14 @@
     Doc.setText(doc, full, { markDirty: !options.markSaved });
     if (options.markSaved) Doc.markSaved(doc);
     els.editor.value = full;
+    updateEditorLineNumbers();
+    if (els.editorSearch.value) applyEditorSearch(els.editorSearch.value, { silent: true });
+    else updateEditorHighlights();
     updateJsonlChrome();
     updateDirtyMark();
     refreshTree();
-    if (!options.silent) setStatus("已退出 JSONL 浏览", "ok");
+    schedulePersistSession();
+    if (!options.silent) setStatus("已切换为整文件编辑", "ok");
   }
 
   function openSettingsPanel() {
@@ -307,12 +389,35 @@
     if (els.settingsDefaultIndent) {
       els.settingsDefaultIndent.value = prefs.defaultIndent;
     }
+    if (els.settingsAutoFormat) {
+      els.settingsAutoFormat.checked = !!prefs.autoFormat;
+    }
     els.settingsPanel.hidden = false;
   }
 
   function closeSettingsPanel() {
     if (!els.settingsPanel) return;
     els.settingsPanel.hidden = true;
+  }
+
+  function discardAndCloseSettings() {
+    closeSettingsPanel();
+  }
+
+  function saveAndCloseSettings() {
+    const nextIndent = els.settingsDefaultIndent
+      ? els.settingsDefaultIndent.value
+      : prefs.defaultIndent;
+    const nextAutoFormat = els.settingsAutoFormat
+      ? !!els.settingsAutoFormat.checked
+      : !!prefs.autoFormat;
+    prefs = Pref.create({
+      defaultIndent: nextIndent,
+      autoFormat: nextAutoFormat,
+    });
+    savePreferences();
+    closeSettingsPanel();
+    setStatus("设置已保存", "ok");
   }
 
   function persistSession() {
@@ -476,6 +581,35 @@
     return window.confirm(message || "有未保存的更改，确定丢弃？");
   }
 
+  function saveSearchToDoc(doc) {
+    if (!doc) return;
+    doc.editorSearchQuery = els.editorSearch ? String(els.editorSearch.value || "") : "";
+    doc.treeSearchQuery = els.treeSearch ? String(els.treeSearch.value || "") : "";
+  }
+
+  function restoreSearchFromDoc(doc) {
+    const editorQ = doc && doc.editorSearchQuery != null ? String(doc.editorSearchQuery) : "";
+    const treeQ = doc && doc.treeSearchQuery != null ? String(doc.treeSearchQuery) : "";
+    if (els.editorSearch) els.editorSearch.value = editorQ;
+    if (els.treeSearch) els.treeSearch.value = treeQ;
+    state.editorSearchApplied = editorQ;
+    state.treeSearchApplied = treeQ;
+    state.editorMatches = [];
+    state.editorMatchIndex = -1;
+    state.matches = [];
+    state.matchIndex = -1;
+    if (editorQ) applyEditorSearch(editorQ, { silent: true });
+    else {
+      updateEditorSearchCount();
+      updateEditorHighlights();
+    }
+    if (treeQ) applySearch(treeQ, { silent: true });
+    else {
+      updateSearchCount();
+      if (state.root) renderTree();
+    }
+  }
+
   function bindActiveDocToEditor() {
     const doc = activeDoc();
     if (!doc) return;
@@ -492,11 +626,11 @@
       showJsonlRecord(doc.jsonlMode.recordIndex || 0, { skipFlush: true, silent: true });
     } else {
       els.editor.value = doc.rawText == null ? "" : String(doc.rawText);
+      updateEditorLineNumbers();
       updateJsonlChrome();
       refreshTree();
     }
-    if (els.editorSearch.value) applyEditorSearch(els.editorSearch.value, { silent: true });
-    else updateEditorSearchCount();
+    restoreSearchFromDoc(doc);
     renderTabs();
   }
 
@@ -511,10 +645,26 @@
       btn.setAttribute("aria-selected", index === ws.activeIndex ? "true" : "false");
       btn.dataset.index = String(index);
       const label = tabDisplayName(doc, index);
-      btn.textContent = doc.isDirty ? "• " + label : label;
-      btn.title = label;
+      const labelEl = document.createElement("span");
+      labelEl.className = "tab-label";
+      labelEl.textContent = doc.isDirty ? "• " + label : label;
+      labelEl.title = label;
+      const closeBtn = document.createElement("button");
+      closeBtn.type = "button";
+      closeBtn.className = "tab-close";
+      closeBtn.title = "关闭";
+      closeBtn.setAttribute("aria-label", "关闭标签");
+      closeBtn.textContent = "×";
+      closeBtn.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        closeTabAt(index);
+      });
+      btn.appendChild(labelEl);
+      btn.appendChild(closeBtn);
       btn.addEventListener("click", () => switchToTab(index));
       btn.addEventListener("dblclick", (event) => {
+        if (event.target.closest(".tab-close")) return;
         event.preventDefault();
         renameTabAt(index);
       });
@@ -533,6 +683,7 @@
       return;
     }
     flushEditorToActiveDoc();
+    saveSearchToDoc(activeDoc());
     WS.activate(ws, index);
     bindActiveDocToEditor();
     schedulePersistSession();
@@ -540,12 +691,16 @@
 
   function createNewTab() {
     flushEditorToActiveDoc();
+    saveSearchToDoc(activeDoc());
     const result = WS.newTab(ws);
     if (!result.ok) {
       setStatus("标签已达上限（20）", "error");
       return;
     }
-    Pref.applyToNewDoc(WS.activeDoc(ws), prefs);
+    const doc = WS.activeDoc(ws);
+    Pref.applyToNewDoc(doc, prefs);
+    doc.editorSearchQuery = "";
+    doc.treeSearchQuery = "";
     els.indent.value = prefs.defaultIndent;
     bindActiveDocToEditor();
     syncDiffPanelAfterTabsChange();
@@ -571,6 +726,7 @@
   function closeTabAt(index) {
     if (index < 0 || index >= ws.tabs.length) return;
     flushEditorToActiveDoc();
+    saveSearchToDoc(activeDoc());
     const doc = ws.tabs[index];
     if (!confirmDiscardDirtyDocs([doc], "该标签有未保存的更改，确定关闭？")) return;
     WS.closeTab(ws, index);
@@ -630,6 +786,15 @@
     els.status.classList.remove("is-error", "is-ok");
     if (kind === "error") els.status.classList.add("is-error");
     if (kind === "ok") els.status.classList.add("is-ok");
+  }
+
+  function joinStatusHint(message, hint) {
+    const base = message == null ? "" : String(message).trim();
+    const tip = hint == null ? "" : String(hint).trim();
+    if (!base) return tip;
+    if (!tip) return base;
+    if (/[.。!！?？]$/.test(base)) return base + " " + tip;
+    return base + "。" + tip;
   }
 
   function syncFileLabel() {
@@ -710,6 +875,9 @@
     }
     updateJsonlChrome();
     updateDirtyMark();
+    updateEditorLineNumbers();
+    if (els.editorSearch.value) applyEditorSearch(els.editorSearch.value, { silent: true });
+    else updateEditorHighlights();
     scheduleParse(options.immediate);
   }
 
@@ -728,7 +896,6 @@
       state.root = null;
       state.matches = [];
       state.matchIndex = -1;
-      state.lastParseOk = true;
       els.tree.innerHTML = '<div class="tree-empty">输入 JSON 后在此显示树结构</div>';
       setStatus("空文档");
       updateSearchCount();
@@ -742,20 +909,25 @@
       state.matchIndex = -1;
       const line = core.parseErrorLine(text);
       const lineHint = line != null ? `line ${line}` : null;
-      const detail = lineHint ? `${built.error}\n${lineHint}` : built.error;
+      const base = lineHint ? `${built.error} (${lineHint})` : built.error;
+      const guide = looksLikeJsonl(text)
+        ? "请点击上方「逐条浏览」按行查看"
+        : "可点击「格式化」尝试修复";
+      const detail = lineHint
+        ? `${built.error}\n${lineHint}\n${guide}`
+        : `${built.error}\n${guide}`;
       els.tree.innerHTML = `<div class="tree-error">解析失败\n${escapeHtml(detail)}</div>`;
-      setStatus(lineHint ? `${built.error} (${lineHint})` : built.error, "error");
-      if (line != null && state.lastParseOk) selectEditorLine(line);
-      state.lastParseOk = false;
+      setStatus(base, "error");
+      updateJsonlChrome();
       updateSearchCount();
       return;
     }
 
     state.root = built.root;
-    state.lastParseOk = true;
     if (!state.expanded.has("0")) state.expanded.add("0");
     renderTree();
     applySearch(els.treeSearch.value, { silent: true });
+    updateJsonlChrome();
     setStatus("有效 JSON", "ok");
   }
 
@@ -838,13 +1010,12 @@
     state.matchIndex = -1;
     if (!state.root || !query || !query.trim()) {
       updateSearchCount();
-      if (!options.silent) renderTree();
-      else renderTree();
+      renderTree();
       return;
     }
 
     core.collectSearchMatches(state.root, query.trim(), state.matches);
-    if (state.matches.length) {
+    if (state.matches.length && !options.silent) {
       state.matchIndex = 0;
       expandToMatch(state.matches[0].id);
     }
@@ -933,14 +1104,78 @@
     }
   }
 
-  function selectEditorMatch(index) {
+  function updateEditorLineNumbers() {
+    if (!els.editorGutter || !els.editor) return;
+    const text = els.editor.value == null ? "" : String(els.editor.value);
+    const count = text.length ? text.split("\n").length : 1;
+    const digits = String(count).length;
+    const lines = [];
+    for (let i = 1; i <= count; i += 1) lines.push(String(i));
+    els.editorGutter.textContent = lines.join("\n");
+    els.editorGutter.style.minWidth = Math.max(36, 12 + digits * 8) + "px";
+    syncEditorGutterScroll();
+  }
+
+  function syncEditorGutterScroll() {
+    if (!els.editorGutter || !els.editor) return;
+    els.editorGutter.scrollTop = els.editor.scrollTop;
+  }
+
+  function syncEditorHighlightScroll() {
+    if (els.editorHighlight) {
+      els.editorHighlight.scrollTop = els.editor.scrollTop;
+      els.editorHighlight.scrollLeft = els.editor.scrollLeft;
+    }
+    syncEditorGutterScroll();
+  }
+
+  function updateEditorHighlights() {
+    if (!els.editorHighlight) return;
+    const text = els.editor.value == null ? "" : String(els.editor.value);
+    const query = els.editorSearch.value == null ? "" : String(els.editorSearch.value);
+    if (!query || !state.editorMatches.length) {
+      els.editorHighlight.textContent = text;
+      syncEditorHighlightScroll();
+      return;
+    }
+    const frag = document.createDocumentFragment();
+    let cursor = 0;
+    state.editorMatches.forEach(function (start, i) {
+      if (start < cursor) return;
+      if (start > cursor) {
+        frag.appendChild(document.createTextNode(text.slice(cursor, start)));
+      }
+      const end = start + query.length;
+      const mark = document.createElement("mark");
+      if (i === state.editorMatchIndex) mark.className = "is-active";
+      mark.textContent = text.slice(start, end);
+      frag.appendChild(mark);
+      cursor = end;
+    });
+    if (cursor < text.length) {
+      frag.appendChild(document.createTextNode(text.slice(cursor)));
+    }
+    els.editorHighlight.innerHTML = "";
+    els.editorHighlight.appendChild(frag);
+    syncEditorHighlightScroll();
+  }
+
+  function selectEditorMatch(index, opts) {
+    const options = opts || {};
     const query = els.editorSearch.value;
     const start = state.editorMatches[index];
     if (start == null || !query) return;
     const end = start + query.length;
-    els.editor.focus();
-    els.editor.setSelectionRange(start, end);
+    if (!options.keepSearchFocus) {
+      els.editor.focus();
+      try {
+        els.editor.setSelectionRange(start, end);
+      } catch (_err) {
+        /* ignore */
+      }
+    }
     scrollEditorToOffset(start);
+    updateEditorHighlights();
   }
 
   function applyEditorSearch(query, opts) {
@@ -950,48 +1185,119 @@
     state.editorMatchIndex = -1;
     if (!q) {
       updateEditorSearchCount();
+      updateEditorHighlights();
       return;
     }
     state.editorMatches = collectEditorOffsets(els.editor.value, q);
     if (state.editorMatches.length) {
       state.editorMatchIndex = 0;
-      if (!options.silent) selectEditorMatch(0);
+      if (!options.silent) selectEditorMatch(0, options);
+      else updateEditorHighlights();
+    } else {
+      updateEditorHighlights();
     }
     updateEditorSearchCount();
   }
 
-  function gotoEditorMatch(delta) {
+  function gotoEditorMatch(delta, opts) {
+    const options = opts || {};
     const query = els.editorSearch.value;
     if (!query) return;
     state.editorMatches = collectEditorOffsets(els.editor.value, query);
     if (!state.editorMatches.length) {
       state.editorMatchIndex = -1;
       updateEditorSearchCount();
+      updateEditorHighlights();
       return;
     }
-    if (state.editorMatchIndex < 0) state.editorMatchIndex = 0;
-    else {
+    if (state.editorMatchIndex < 0) {
+      state.editorMatchIndex = delta < 0 ? state.editorMatches.length - 1 : 0;
+    } else {
       state.editorMatchIndex =
         (state.editorMatchIndex + delta + state.editorMatches.length) % state.editorMatches.length;
     }
-    selectEditorMatch(state.editorMatchIndex);
+    selectEditorMatch(state.editorMatchIndex, options);
     updateEditorSearchCount();
   }
 
+  function looksLikeJsonl(text) {
+    if (!JSONL || typeof JSONL.parse !== "function") return false;
+    const raw = String(text == null ? "" : text);
+    if (!raw.trim()) return false;
+    try {
+      JSON.parse(raw);
+      return false;
+    } catch (_err) {
+      /* not a single JSON document */
+    }
+    const parsed = JSONL.parse(raw);
+    let valid = 0;
+    for (let i = 0; i < parsed.lines.length; i += 1) {
+      if (parsed.lines[i].isValid) valid += 1;
+      if (valid >= 2) return true;
+    }
+    return false;
+  }
+
   function formatEditor() {
+    const doc = activeDoc();
+    const raw = els.editor.value;
+    if (doc && !doc.jsonlMode && looksLikeJsonl(raw)) {
+      if (enterJsonlMode(raw, { silent: false })) {
+        markProgrammaticDirty();
+        schedulePersistSession();
+        setStatus("检测到 JSONL，已进入逐条浏览（可对当前条格式化）", "ok");
+        return;
+      }
+    }
     try {
       const indent = els.indent.value;
-      let text = els.editor.value;
+      let text = raw;
+      let repaired = false;
       try {
         text = core.format(text, indent);
       } catch (err) {
         text = core.format(core.repair(text), indent);
+        repaired = true;
       }
       setEditorText(text, { immediate: true });
       markProgrammaticDirty();
-      setStatus("已格式化", "ok");
+      setStatus(repaired ? "已修复并格式化" : "已格式化", "ok");
     } catch (err) {
-      setStatus(err.message || String(err), "error");
+      const message = err && err.message ? err.message : String(err);
+      const line = core.parseErrorLine(raw);
+      if (looksLikeJsonl(raw)) {
+        setStatus(joinStatusHint(message, "请点击「逐条浏览」按行查看"), "error");
+        updateJsonlChrome();
+      } else {
+        const status =
+          line != null ? joinStatusHint(message, "line " + line) : message;
+        setStatus(status, "error");
+      }
+      if (line != null) selectEditorLine(line);
+    }
+  }
+
+  function enterJsonlFromFullEditor() {
+    flushEditorToActiveDoc();
+    const doc = activeDoc();
+    if (!doc) return;
+    if (doc.jsonlMode) {
+      setStatus("已在逐条浏览模式", "ok");
+      updateJsonlChrome();
+      return;
+    }
+    const raw = doc.rawText == null ? els.editor.value : String(doc.rawText);
+    if (!String(raw).trim()) {
+      setStatus("没有可浏览的内容", "error");
+      return;
+    }
+    if (!looksLikeJsonl(raw) && !isJsonlFileName(doc.fileName) && !isJsonlFileName(doc.filePath)) {
+      setStatus("当前内容不像 JSONL（需至少两行合法 JSON）", "error");
+      return;
+    }
+    if (enterJsonlMode(raw, { silent: false })) {
+      schedulePersistSession();
     }
   }
 
@@ -1006,19 +1312,6 @@
       setEditorText(text, { immediate: true });
       markProgrammaticDirty();
       setStatus("已压缩", "ok");
-    } catch (err) {
-      setStatus(err.message || String(err), "error");
-    }
-  }
-
-  function repairEditor() {
-    try {
-      const repaired = core.repair(els.editor.value);
-      const indent = els.indent.value;
-      const formatted = core.format(repaired, indent);
-      setEditorText(formatted, { immediate: true });
-      markProgrammaticDirty();
-      setStatus("已修复并格式化", "ok");
     } catch (err) {
       setStatus(err.message || String(err), "error");
     }
@@ -1048,28 +1341,99 @@
     }
   }
 
+  function maybeFormatText(raw, indentKey) {
+    if (!prefs.autoFormat) return { text: raw, formatted: false, repaired: false };
+    try {
+      return { text: core.format(raw, indentKey), formatted: true, repaired: false };
+    } catch (err) {
+      try {
+        return {
+          text: core.format(core.repair(raw), indentKey),
+          formatted: true,
+          repaired: true,
+        };
+      } catch (err2) {
+        return { text: raw, formatted: false, repaired: false };
+      }
+    }
+  }
+
+  function applyPastedContent(clip, opts) {
+    const options = opts || {};
+    const pasted = clip == null ? "" : String(clip);
+    if (!pasted) {
+      setStatus("剪贴板为空", "error");
+      return false;
+    }
+    const doc = activeDoc();
+    const replaceAll = !!options.replaceAll;
+    const start = replaceAll ? 0 : els.editor.selectionStart;
+    const end = replaceAll ? els.editor.value.length : els.editor.selectionEnd;
+    const before = replaceAll ? "" : els.editor.value.slice(0, start);
+    const after = replaceAll ? "" : els.editor.value.slice(end);
+    const merged = before + pasted + after;
+    const canEnterJsonl =
+      looksLikeJsonl(pasted) && !before.trim() && !after.trim();
+
+    if (canEnterJsonl) {
+      if (doc && doc.jsonlMode) clearJsonlMode(doc);
+      enterJsonlMode(pasted, { silent: false });
+      markProgrammaticDirty();
+      schedulePersistSession();
+      setStatus("已粘贴并按 JSONL 浏览", "ok");
+      return true;
+    }
+
+    if (doc && doc.jsonlMode) {
+      const recordText = merged;
+      els.editor.value = recordText;
+      updateEditorLineNumbers();
+      try {
+        els.editor.setSelectionRange(start + pasted.length, start + pasted.length);
+      } catch (_err) {
+        /* ignore */
+      }
+      syncJsonlDraftToDoc();
+      if (prefs.autoFormat) {
+        try {
+          const pretty = core.format(els.editor.value, els.indent.value);
+          els.editor.value = pretty;
+          updateEditorLineNumbers();
+          syncJsonlDraftToDoc();
+          flushJsonlRecordToBuffer();
+          showJsonlRecord(doc.jsonlMode.recordIndex, { skipFlush: true, silent: true });
+          setStatus("已粘贴并格式化当前记录", "ok");
+        } catch (_err) {
+          updateDirtyMark();
+          refreshTree();
+          schedulePersistSession();
+          setStatus("已粘贴到当前记录", "ok");
+        }
+      } else {
+        updateDirtyMark();
+        refreshTree();
+        schedulePersistSession();
+        setStatus("已粘贴到当前记录", "ok");
+      }
+      return true;
+    }
+
+    const result = maybeFormatText(merged, els.indent.value);
+    setEditorText(result.text, { immediate: true });
+    markProgrammaticDirty();
+    if (result.formatted) {
+      setStatus(result.repaired ? "已粘贴并修复格式化" : "已粘贴并格式化", "ok");
+    } else if (prefs.autoFormat) {
+      setStatus("已粘贴（未格式化）。可点击「格式化」尝试修复", "error");
+    } else {
+      setStatus("已粘贴", "ok");
+    }
+    return true;
+  }
+
   async function pasteAndFormat() {
     const clip = readClipboard();
-    if (!clip) {
-      setStatus("剪贴板为空", "error");
-      return;
-    }
-    try {
-      const indent = els.indent.value;
-      let text = clip;
-      try {
-        text = core.format(clip, indent);
-      } catch (err) {
-        text = core.format(core.repair(clip), indent);
-      }
-      setEditorText(text, { immediate: true });
-      markProgrammaticDirty();
-      setStatus("已粘贴并格式化", "ok");
-    } catch (err) {
-      setEditorText(clip, { immediate: true });
-      markProgrammaticDirty();
-      setStatus("已粘贴（未格式化）", "error");
-    }
+    applyPastedContent(clip, { replaceAll: true });
   }
 
   function hideMenu() {
@@ -1096,9 +1460,23 @@
     if (doc && doc.jsonlMode) syncJsonlDraftToDoc();
     else if (doc) Doc.setText(doc, els.editor.value, { markDirty: true });
     updateDirtyMark();
+    updateEditorLineNumbers();
     scheduleParse(false);
     schedulePersistSession();
     if (els.editorSearch.value) applyEditorSearch(els.editorSearch.value, { silent: true });
+    else updateEditorHighlights();
+  });
+
+  els.editor.addEventListener("scroll", syncEditorHighlightScroll);
+
+  els.editor.addEventListener("paste", (event) => {
+    const clip =
+      (event.clipboardData && event.clipboardData.getData("text")) ||
+      (event.clipboardData && event.clipboardData.getData("text/plain")) ||
+      "";
+    if (!clip) return;
+    event.preventDefault();
+    applyPastedContent(clip, { replaceAll: false });
   });
 
   els.editor.addEventListener("keydown", (event) => {
@@ -1116,26 +1494,44 @@
 
   els.editorSearch.addEventListener("input", () => {
     clearTimeout(state.editorSearchTimer);
-    state.editorSearchTimer = setTimeout(() => applyEditorSearch(els.editorSearch.value), 120);
+    state.editorSearchTimer = setTimeout(() => {
+      saveSearchToDoc(activeDoc());
+      applyEditorSearch(els.editorSearch.value, { silent: true });
+      state.editorSearchApplied = els.editorSearch.value;
+    }, 120);
   });
 
   els.editorSearch.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       event.preventDefault();
-      if (!state.editorMatches.length) applyEditorSearch(els.editorSearch.value);
-      else gotoEditorMatch(event.shiftKey ? -1 : 1);
+      const q = els.editorSearch.value;
+      if (!q) return;
+      if (!state.editorMatches.length || state.editorSearchApplied !== q) {
+        applyEditorSearch(q, { silent: true });
+        state.editorSearchApplied = q;
+        if (state.editorMatches.length) {
+          state.editorMatchIndex = event.shiftKey ? state.editorMatches.length - 1 : 0;
+          selectEditorMatch(state.editorMatchIndex, { keepSearchFocus: true });
+          updateEditorSearchCount();
+        }
+      } else {
+        gotoEditorMatch(event.shiftKey ? -1 : 1, { keepSearchFocus: true });
+      }
     } else if (event.key === "Escape") {
       event.preventDefault();
       els.editor.focus();
     }
   });
 
-  document.getElementById("editor-search-prev").addEventListener("click", () => gotoEditorMatch(-1));
-  document.getElementById("editor-search-next").addEventListener("click", () => gotoEditorMatch(1));
+  document.getElementById("editor-search-prev").addEventListener("click", () => {
+    gotoEditorMatch(-1, { keepSearchFocus: true });
+  });
+  document.getElementById("editor-search-next").addEventListener("click", () => {
+    gotoEditorMatch(1, { keepSearchFocus: true });
+  });
 
   document.getElementById("btn-format").addEventListener("click", formatEditor);
   document.getElementById("btn-minify").addEventListener("click", minifyEditor);
-  document.getElementById("btn-repair").addEventListener("click", repairEditor);
   document.getElementById("btn-to-python").addEventListener("click", toPythonEditor);
   document.getElementById("btn-to-json").addEventListener("click", toJSONEditor);
   document.getElementById("btn-clear").addEventListener("click", () => {
@@ -1367,6 +1763,7 @@
     Doc.setText(doc, text, { markDirty: true });
     if (tabIndex === ws.activeIndex) {
       els.editor.value = text;
+      updateEditorLineNumbers();
       updateDirtyMark();
       scheduleParse(true);
     } else {
@@ -1552,16 +1949,35 @@
       rememberRecent(filePath);
       return result;
     }
-    let rawText = content;
-    try {
-      rawText = core.format(content, els.indent.value);
-    } catch (err) {
-      rawText = content;
+    if (looksLikeJsonl(content)) {
+      const result = WS.openPath(ws, {
+        filePath,
+        fileName: resolvedName,
+        rawText: content,
+        indentKey: els.indent.value,
+      });
+      if (!result.ok) return result;
+      if (!(result.reused && !result.refreshed)) {
+        enterJsonlMode(content, { markSaved: true, silent: true });
+      } else {
+        const doc = WS.activeDoc(ws);
+        if (doc && !doc.jsonlMode) {
+          const wasDirty = !!doc.isDirty;
+          enterJsonlMode(doc.rawText == null ? "" : String(doc.rawText), {
+            markSaved: !wasDirty,
+            silent: true,
+          });
+          if (wasDirty) Doc.markDirty(doc);
+        }
+      }
+      rememberRecent(filePath);
+      return result;
     }
+    const formatted = maybeFormatText(content, els.indent.value);
     const result = WS.openPath(ws, {
       filePath,
       fileName: resolvedName,
-      rawText,
+      rawText: formatted.text,
       indentKey: els.indent.value,
     });
     if (!result.ok) return result;
@@ -1740,26 +2156,10 @@
   }
 
   document.getElementById("btn-open").addEventListener("click", openJsonViaDialog);
-  document.getElementById("btn-jsonl").addEventListener("click", () => {
-    flushEditorToActiveDoc();
-    const doc = activeDoc();
-    if (!doc) return;
-    if (doc.jsonlMode) {
-      setStatus("已在 JSONL 浏览模式", "ok");
-      updateJsonlChrome();
-      return;
-    }
-    const raw = doc.rawText == null ? els.editor.value : String(doc.rawText);
-    if (!String(raw).trim()) {
-      setStatus("没有可浏览的内容", "error");
-      return;
-    }
-    enterJsonlMode(raw, { silent: false });
-    schedulePersistSession();
-  });
   const jsonlPrev = document.getElementById("jsonl-prev");
   const jsonlNext = document.getElementById("jsonl-next");
   const jsonlExit = document.getElementById("jsonl-exit");
+  const jsonlEnter = document.getElementById("jsonl-enter");
   if (jsonlPrev) {
     jsonlPrev.addEventListener("click", () => {
       const doc = activeDoc();
@@ -1777,24 +2177,25 @@
   if (jsonlExit) {
     jsonlExit.addEventListener("click", () => {
       exitJsonlMode();
-      schedulePersistSession();
+    });
+  }
+  if (jsonlEnter) {
+    jsonlEnter.addEventListener("click", () => {
+      enterJsonlFromFullEditor();
     });
   }
   document.getElementById("btn-settings").addEventListener("click", openSettingsPanel);
-  const settingsClose = document.getElementById("settings-close");
-  if (settingsClose) {
-    settingsClose.addEventListener("click", closeSettingsPanel);
+  const settingsSaveClose = document.getElementById("settings-save-close");
+  if (settingsSaveClose) {
+    settingsSaveClose.addEventListener("click", saveAndCloseSettings);
+  }
+  const settingsDismiss = document.getElementById("settings-dismiss");
+  if (settingsDismiss) {
+    settingsDismiss.addEventListener("click", discardAndCloseSettings);
   }
   if (els.settingsPanel) {
     els.settingsPanel.addEventListener("click", (event) => {
-      if (event.target === els.settingsPanel) closeSettingsPanel();
-    });
-  }
-  if (els.settingsDefaultIndent) {
-    els.settingsDefaultIndent.addEventListener("change", () => {
-      prefs = Pref.create({ defaultIndent: els.settingsDefaultIndent.value });
-      savePreferences();
-      setStatus("已更新默认缩进（仅影响新建标签）", "ok");
+      if (event.target === els.settingsPanel) discardAndCloseSettings();
     });
   }
   if (els.btnRecent) {
@@ -1826,20 +2227,43 @@
 
   els.treeSearch.addEventListener("input", () => {
     clearTimeout(state.searchTimer);
-    state.searchTimer = setTimeout(() => applySearch(els.treeSearch.value), 200);
+    state.searchTimer = setTimeout(() => {
+      saveSearchToDoc(activeDoc());
+      applySearch(els.treeSearch.value, { silent: true });
+      state.treeSearchApplied = els.treeSearch.value;
+    }, 200);
   });
 
   els.treeSearch.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       event.preventDefault();
       clearTimeout(state.searchTimer);
-      applySearch(els.treeSearch.value);
-      if (state.matches.length) gotoMatch(event.shiftKey ? -1 : 1);
+      const q = els.treeSearch.value;
+      if (!q.trim()) return;
+      if (!state.matches.length || state.treeSearchApplied !== q) {
+        applySearch(q, { silent: true });
+        state.treeSearchApplied = q;
+        if (state.matches.length) {
+          state.matchIndex = event.shiftKey ? state.matches.length - 1 : 0;
+          expandToMatch(state.matches[state.matchIndex].id);
+          updateSearchCount();
+          renderTree();
+        }
+      } else {
+        gotoMatch(event.shiftKey ? -1 : 1);
+      }
     }
   });
 
   document.getElementById("search-prev").addEventListener("click", () => gotoMatch(-1));
   document.getElementById("search-next").addEventListener("click", () => gotoMatch(1));
+
+  function updateTreeSelection() {
+    if (!els.tree) return;
+    els.tree.querySelectorAll(".tree-node").forEach(function (row) {
+      row.classList.toggle("is-selected", row.dataset.id === state.selectedId);
+    });
+  }
 
   els.tree.addEventListener("click", (event) => {
     const row = event.target.closest(".tree-node");
@@ -1849,17 +2273,18 @@
     if (event.target.classList.contains("tree-twistie")) {
       const node = nodeById(id);
       if (node && node.children.length) toggleExpand(id);
-      else renderTree();
+      else updateTreeSelection();
       return;
     }
-    renderTree();
-  });
-
-  els.tree.addEventListener("dblclick", (event) => {
-    const row = event.target.closest(".tree-node");
-    if (!row) return;
-    const node = nodeById(row.dataset.id);
-    if (node && node.children.length) toggleExpand(node.id);
+    // detail===2：双击展开/收起；单击只改选中，避免整树重绘打断 dblclick
+    if (event.detail === 2) {
+      const node = nodeById(id);
+      if (node && node.children.length) {
+        toggleExpand(id);
+        return;
+      }
+    }
+    updateTreeSelection();
   });
 
   els.tree.addEventListener("contextmenu", (event) => {
@@ -2020,11 +2445,11 @@
       return;
     }
 
-    if (
-      (code === "dotjson-text" || type === "over" || type === "regex" || type === "text") &&
-      typeof payload === "string" &&
-      payload.trim()
-    ) {
+    // 关键词进入（code=dotjson, type=text）时 payload 常为匹配词本身（如 "json"），
+    // 不能当内容写入；仅选中文本 / over / regex 才载入。
+    const isTextPayload =
+      code === "dotjson-text" || type === "over" || type === "regex";
+    if (isTextPayload && typeof payload === "string" && payload.trim()) {
       flushEditorToActiveDoc();
       const reuseIndex = WS.findReusableEmptyIndex(ws);
       if (reuseIndex >= 0) {
@@ -2040,25 +2465,19 @@
       }
       const indentKey = (WS.activeDoc(ws) && WS.activeDoc(ws).indentKey) || prefs.defaultIndent;
       els.indent.value = indentKey;
-      try {
-        let text = payload;
-        try {
-          text = core.format(payload, indentKey);
-        } catch (err) {
-          try {
-            text = core.format(core.repair(payload), indentKey);
-          } catch (err2) {
-            text = payload;
-          }
-        }
-        setEditorText(text, { clearFile: true, immediate: true });
-        syncDiffPanelAfterTabsChange();
-        schedulePersistSession();
+      const result = maybeFormatText(payload, indentKey);
+      setEditorText(result.text, { clearFile: true, immediate: true });
+      syncDiffPanelAfterTabsChange();
+      schedulePersistSession();
+      if (result.formatted) {
+        setStatus(
+          result.repaired ? "已载入并修复格式化" : "已载入并格式化",
+          "ok"
+        );
+      } else if (prefs.autoFormat) {
+        setStatus("已载入（未格式化）。可点击「格式化」尝试修复", "error");
+      } else {
         setStatus("已载入选中文本", "ok");
-      } catch (err) {
-        setEditorText(payload, { clearFile: true, immediate: true });
-        syncDiffPanelAfterTabsChange();
-        schedulePersistSession();
       }
     }
   }
@@ -2091,6 +2510,7 @@
   } else {
     bindActiveDocToEditor();
   }
+  updateEditorLineNumbers();
   renderTabs();
   updateJsonlChrome();
 })();
