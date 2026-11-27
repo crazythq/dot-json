@@ -17,6 +17,13 @@
       "explain": "用 DotJSON 打开选中文本",
       "cmds": [
         {
+          "type": "regex",
+          "label": "用 DotJSON 打开",
+          "match": "/^\\s*[\\{\\[]/",
+          "minLength": 2,
+          "maxLength": 100000
+        },
+        {
           "type": "over",
           "label": "用 DotJSON 打开",
           "minLength": 2,
